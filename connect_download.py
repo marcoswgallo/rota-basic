@@ -1,111 +1,175 @@
+import os
+import time
+import shutil
+import logging
+from datetime import datetime
+from dotenv import load_dotenv
+
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-import time, os, shutil
-from datetime import datetime
 
-# ─── CONFIGURAÇÕES ───────────────────────────────────────────
-URL_LOGIN     = "https://basic.controlservices.com.br/login"
-URL_RELATORIO = "https://basic.controlservices.com.br/financeiro/relatorio"
-EMAIL         = "gallo@redeclaro.com.br"
-SENHA         = "Basic@159753"
-DOWNLOAD_DIR  = "/opt/rota_basic/downloads"
-DESTINO_FINAL = "/opt/rota_basic/rota_atual.xlsx"
-# ─────────────────────────────────────────────────────────────
+load_dotenv()
 
-def rodar():
-    print(f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] Iniciando...")
-    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-    for f in os.listdir(DOWNLOAD_DIR):
-        os.remove(os.path.join(DOWNLOAD_DIR, f))
+EMAIL = os.getenv("EMAIL")
+PASSWORD = os.getenv("PASSWORD")
 
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("prefs", {
+BASE_URL = "https://basic.controlservices.com.br"
+LOGIN_URL = f"{BASE_URL}/login"
+REL_URL = f"{BASE_URL}/financeiro/relatorio"
+
+DOWNLOAD_DIR = os.path.abspath("./downloads")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+log = logging.getLogger("basic_analitico")
+
+
+def clean_dir(path: str):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    os.makedirs(path, exist_ok=True)
+
+
+def wait_download(download_dir: str, timeout=240) -> str:
+    end = time.time() + timeout
+    while time.time() < end:
+        files = os.listdir(download_dir)
+
+        # aguardando downloads parciais
+        if any(f.endswith(".crdownload") for f in files):
+            time.sleep(1)
+            continue
+
+        xlsx = [f for f in files if f.lower().endswith(".xlsx")]
+        if xlsx:
+            paths = [os.path.join(download_dir, f) for f in xlsx]
+            latest = max(paths, key=os.path.getmtime)
+            return latest
+
+        time.sleep(1)
+
+    raise TimeoutError("Download do XLSX não apareceu no tempo esperado.")
+
+
+def mark_excel_checkbox(driver):
+    """
+    Marca o checkbox 'EXCEL' de forma robusta:
+    - tenta achar o input checkbox perto do texto 'EXCEL'
+    """
+    # tenta pelo label contendo EXCEL
+    labels = driver.find_elements(By.XPATH, "//label[contains(translate(., 'excel', 'EXCEL'),'EXCEL')]")
+    if labels:
+        for lab in labels:
+            try:
+                # se label estiver ligado a input via 'for'
+                for_attr = lab.get_attribute("for")
+                if for_attr:
+                    cb = driver.find_element(By.ID, for_attr)
+                    if not cb.is_selected():
+                        driver.execute_script("arguments[0].click();", cb)
+                    return
+            except Exception:
+                pass
+
+    # fallback: qualquer checkbox visível próximo do texto EXCEL
+    cb = driver.find_element(
+        By.XPATH,
+        "//*[contains(translate(., 'excel','EXCEL'),'EXCEL')]/preceding::input[@type='checkbox'][1]"
+    )
+    if not cb.is_selected():
+        driver.execute_script("arguments[0].click();", cb)
+
+
+def baixar_relatorio_analitico(data_ini: str, data_fim: str) -> str:
+    """
+    data_ini / data_fim no formato YYYY-MM-DD (ex: 2026-02-24)
+    """
+    if not EMAIL or not PASSWORD:
+        raise RuntimeError("Defina EMAIL e PASSWORD no .env")
+
+    clean_dir(DOWNLOAD_DIR)
+
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("window-size=1920x1080")
+    chrome_options.add_argument("--lang=pt-BR")
+
+    prefs = {
         "download.default_directory": DOWNLOAD_DIR,
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
         "safebrowsing.enabled": True,
-        "safebrowsing.disable_download_protection": True
-    })
+        "plugins.always_open_pdf_externally": True,
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
 
-    driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
-    driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-        "behavior": "allow",
-        "downloadPath": DOWNLOAD_DIR
-    })
-
-    wait = WebDriverWait(driver, 30)
+    driver = webdriver.Chrome(service=Service(), options=chrome_options)
+    wait = WebDriverWait(driver, 60)
 
     try:
-        # LOGIN
-        print("  → Login...")
-        driver.get(URL_LOGIN)
-        wait.until(EC.presence_of_element_located((By.NAME, "email"))).send_keys(EMAIL)
-        driver.find_element(By.NAME, "password").send_keys(SENHA)
-        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))).click()
-        time.sleep(4)
-        print(f"  → Logado: {driver.current_url}")
+        # 1) LOGIN
+        log.info("Abrindo login…")
+        driver.get(LOGIN_URL)
 
-        # NAVEGAR PARA RELATÓRIOS
-        print("  → Abrindo relatórios...")
-        driver.get(URL_RELATORIO)
-        time.sleep(3)
+        email_el = wait.until(EC.presence_of_element_located((By.NAME, "email")))
+        pass_el = driver.find_element(By.NAME, "password")
 
-        # MODELO = Relatório Analítico (value=2)
-        wait.until(EC.presence_of_element_located((By.NAME, "tipoRelat")))
-        Select(driver.find_element(By.NAME, "tipoRelat")).select_by_value("2")
-        print("  → Modelo selecionado: Relatório Analítico")
+        email_el.clear()
+        email_el.send_keys(EMAIL)
+        pass_el.clear()
+        pass_el.send_keys(PASSWORD)
 
-        # DATA = HOJE
-        hoje = datetime.now().strftime("%Y-%m-%d")
-        for campo in driver.find_elements(By.CSS_SELECTOR, "input[type='date']"):
-            driver.execute_script(f"arguments[0].value = '{hoje}';", campo)
-        print(f"  → Data definida: {hoje}")
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-        # MARCAR EXCEL
-        checkbox_excel = driver.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
-        if not checkbox_excel.is_selected():
-            checkbox_excel.click()
-        print("  → Excel marcado!")
+        # aguarda home
+        wait.until(EC.url_contains("/home"))
+        log.info("Login OK.")
 
-        # CLICAR EM BUSCAR
-        print("  → Clicando Buscar...")
-        botoes = driver.find_elements(By.TAG_NAME, "button")
-        for btn in botoes:
-            if btn.text.strip().upper() == "BUSCAR":
-                btn.click()
-                print("  → Buscar clicado!")
-                break
+        # 2) IR PRA PÁGINA DO RELATÓRIO
+        log.info("Abrindo página do relatório…")
+        driver.get(REL_URL)
 
-        # AGUARDAR DOWNLOAD (até 2 minutos)
-        print("  → Aguardando download...")
-        for i in range(60):
-            arqs = [f for f in os.listdir(DOWNLOAD_DIR) if f.endswith((".xlsx", ".xls"))]
-            if arqs:
-                time.sleep(2)
-                shutil.copy2(os.path.join(DOWNLOAD_DIR, arqs[0]), DESTINO_FINAL)
-                print(f"  ✅ Download concluído! Salvo em: {DESTINO_FINAL}")
-                break
-            time.sleep(2)
-        else:
-            print("  ❌ Timeout: arquivo não baixado em 2 minutos.")
+        # 3) MODELO = Relatorio Analitico (select name='tipoRelat')
+        log.info("Selecionando modelo: Relatorio Analitico…")
+        modelo_el = wait.until(EC.element_to_be_clickable((By.NAME, "tipoRelat")))
+        Select(modelo_el).select_by_visible_text("Relatorio Analitico")
 
-    except Exception as e:
-        print(f"  ❌ Erro: {e}")
-        print(f"  → URL atual: {driver.current_url}")
+        # 4) DATAS
+        log.info(f"Preenchendo datas: {data_ini} a {data_fim}…")
+        data_ini_el = driver.find_element(By.NAME, "data_ini")
+        data_fim_el = driver.find_element(By.NAME, "data_fim")
+
+        # set via JS (evita máscara do input)
+        driver.execute_script("arguments[0].value = arguments[1];", data_ini_el, data_ini)
+        driver.execute_script("arguments[0].value = arguments[1];", data_fim_el, data_fim)
+
+        # 5) MARCAR EXCEL
+        log.info("Marcando opção EXCEL…")
+        mark_excel_checkbox(driver)
+
+        # 6) CLICAR BUSCAR
+        log.info("Clicando em BUSCAR…")
+        buscar_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'BUSCAR')]")))
+        buscar_btn.click()
+
+        # 7) ESPERAR DOWNLOAD
+        log.info("Aguardando download do XLSX…")
+        xlsx_path = wait_download(DOWNLOAD_DIR, timeout=300)
+        log.info(f"OK: {xlsx_path}")
+        return xlsx_path
 
     finally:
         driver.quit()
-        print(f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] Finalizado.")
+
 
 if __name__ == "__main__":
-    rodar()
+    hoje = datetime.today().strftime("%Y-%m-%d")
+    print(baixar_relatorio_analitico(hoje, hoje))
