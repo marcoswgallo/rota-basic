@@ -9,6 +9,7 @@ from datetime import datetime
 
 # ─── CONFIGURAÇÕES ───────────────────────────────────────────
 URL_LOGIN     = "https://basic.controlservices.com.br/login"
+URL_RELATORIO = "https://basic.controlservices.com.br/financeiro/relatorio"
 EMAIL         = "gallo@redeclaro.com.br"
 SENHA         = "Basic@159753"
 DOWNLOAD_DIR  = "/opt/rota_basic/downloads"
@@ -49,19 +50,13 @@ def rodar():
 
         # NAVEGAR PARA RELATÓRIOS
         print("  → Abrindo relatórios...")
-        driver.get("https://basic.controlservices.com.br/financeiro/relatorios")
+        driver.get(URL_RELATORIO)
         time.sleep(3)
 
-        # PREENCHER FORMULÁRIO
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "select")))
-        selects = driver.find_elements(By.TAG_NAME, "select")
-        for s in selects:
-            opts = [o.text for o in Select(s).options]
-            for j, o in enumerate(opts):
-                if "Analitico" in o or "Analítico" in o:
-                    Select(s).select_by_index(j)
-                    print("  → Modelo selecionado!")
-                    break
+        # MODELO = Relatório Analítico (value=2)
+        wait.until(EC.presence_of_element_located((By.NAME, "tipoRelat")))
+        Select(driver.find_element(By.NAME, "tipoRelat")).select_by_value("2")
+        print("  → Modelo selecionado: Relatório Analítico")
 
         # DATA = HOJE
         hoje = datetime.now().strftime("%Y-%m-%d")
@@ -69,21 +64,12 @@ def rodar():
             driver.execute_script(f"arguments[0].value = '{hoje}';", campo)
         print(f"  → Data definida: {hoje}")
 
-        # GARANTIR EXCEL MARCADO
-        for cb in driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']"):
-            if not cb.is_selected():
-                cb.click()
-
         # CLICAR EM BUSCAR
         print("  → Clicando Buscar...")
-        for btn in driver.find_elements(By.TAG_NAME, "button"):
-            if "BUSCAR" in btn.text.upper():
-                btn.click()
-                print("  → Buscar clicado!")
-                break
+        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btn-primary"))).click()
+        print("  → Buscar clicado! Aguardando download...")
 
         # AGUARDAR DOWNLOAD (até 2 minutos)
-        print("  → Aguardando download...")
         for i in range(60):
             arqs = [f for f in os.listdir(DOWNLOAD_DIR) if f.endswith((".xlsx", ".xls"))]
             if arqs:
