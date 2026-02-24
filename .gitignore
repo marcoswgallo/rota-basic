@@ -1,0 +1,5 @@
+.env
+downloads/
+artifacts_connect/
+.venv/
+__pycache__/
