@@ -2,4 +2,4 @@
 downloads/
 artifacts_connect/
 .venv/
-__pycache__/
+__pycache__/.env
