@@ -23,19 +23,28 @@ def rodar():
         os.remove(os.path.join(DOWNLOAD_DIR, f))
 
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("prefs", {
         "download.default_directory": DOWNLOAD_DIR,
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
-        "safebrowsing.enabled": True
+        "safebrowsing.enabled": True,
+        "safebrowsing.disable_download_protection": True
     })
 
     driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
+
+    # Habilita downloads no modo headless
+    driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+        "behavior": "allow",
+        "downloadPath": DOWNLOAD_DIR
+    })
+
     wait = WebDriverWait(driver, 30)
 
     try:
