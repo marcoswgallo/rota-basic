@@ -57,22 +57,30 @@ def get_access_token_client_credentials() -> str:
 
 
 def get_access_token_refresh_token() -> str:
-    """
-    Delegated permissions (refresh_token).
-    Observação: para evitar AADSTS9002313/invalid_grant, aqui NÃO enviamos "scope".
-    """
     _require_env("TENANT_ID", TENANT_ID)
     _require_env("CLIENT_ID", CLIENT_ID)
     _require_env("CLIENT_SECRET", CLIENT_SECRET)
     _require_env("PBI_REFRESH_TOKEN", PBI_REFRESH_TOKEN)
 
-    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+    url = f"https://login.microsoftonline.com/{TENANT_ID.strip()}/oauth2/v2.0/token"
     data = {
         "grant_type": "refresh_token",
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": PBI_REFRESH_TOKEN,
+        "client_id": CLIENT_ID.strip(),
+        "client_secret": CLIENT_SECRET.strip(),
+        "refresh_token": PBI_REFRESH_TOKEN.strip(),
+        # ✅ sem scope (primeiro teste)
     }
+
+    r = requests.post(url, data=data, timeout=60)
+
+    if not r.ok:
+        print("⛔ Token endpoint retornou erro:")
+        print("STATUS:", r.status_code)
+        print("BODY:", r.text)  # <- aqui vem o motivo real (invalid_grant / invalid_client / invalid_scope)
+        r.raise_for_status()
+
+    j = r.json()
+    return j["access_token"]
 
     r = requests.post(url, data=data, timeout=60)
     r.raise_for_status()
