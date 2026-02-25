@@ -2,141 +2,223 @@ import os
 import time
 import subprocess
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE = os.path.join(BASE_DIR, "cron.log")
-
-RUN_ALL = os.path.join(BASE_DIR, "run_all.sh")
-RUN_CONNECT = os.path.join(BASE_DIR, "connect_download.py")
-RUN_DASH = os.path.join(BASE_DIR, "send_dash_telegram.py")
-VENV_PYTHON = os.path.join(BASE_DIR, "venv/bin/python")
-
-if not BOT_TOKEN:
-    raise RuntimeError("Defina TELEGRAM_BOT_TOKEN no .env")
-
-if not CHAT_ID:
-    raise RuntimeError("Defina TELEGRAM_CHAT_ID no .env")
+CHAT_ID = str(os.getenv("TELEGRAM_CHAT_ID", "")).strip()
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+BASE_DIR = os.getenv("BASE_DIR", "/root/rota-basic")
+VENV_PY = os.getenv("VENV_PY", f"{BASE_DIR}/venv/bin/python")
 
-# ===============================
-# Funções Telegram
-# ===============================
+LOG_FILE = os.getenv("BOT_LOG_FILE", f"{BASE_DIR}/bot_commands.log")
 
-def send_message(text: str):
+POLL_TIMEOUT = int(os.getenv("POLL_TIMEOUT", "50"))
+SLEEP_ON_ERROR = int(os.getenv("SLEEP_ON_ERROR", "3"))
+
+# Liga/desliga refresh do Power BI durante /rodar
+ENABLE_PBI_REFRESH = os.getenv("ENABLE_PBI_REFRESH", "1") == "1"
+
+
+def log_line(msg: str):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{ts} - {msg}"
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+    print(line)
+
+
+def tg_send_message(text: str):
     requests.post(
         f"{API}/sendMessage",
         data={"chat_id": CHAT_ID, "text": text},
-        timeout=30,
+        timeout=60
     )
 
 
-def get_updates(offset=None):
-    params = {"timeout": 50}
-    if offset:
-        params["offset"] = offset
-
-    r = requests.get(f"{API}/getUpdates", params=params, timeout=60)
-    return r.json()
-
-
-# ===============================
-# Utilidades
-# ===============================
-
-def tail_log(lines=30):
-    if not os.path.exists(LOG_FILE):
-        return "Sem log ainda."
-
-    with open(LOG_FILE, "r") as f:
-        content = f.readlines()
-
-    return "".join(content[-lines:])[-3500:]
+def tail_log(path: str, lines: int = 30) -> str:
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            data = f.readlines()
+        return "".join(data[-lines:])
+    except Exception as e:
+        return f"(Não consegui ler log: {e})"
 
 
-def run_command(command):
-    process = subprocess.Popen(
-        command,
-        shell=True,
-        cwd=BASE_DIR,
-        stdout=open(LOG_FILE, "a"),
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    return process.wait()
+def run_script(py_file: str, timeout: int = 1800) -> tuple[int, str]:
+    """
+    Roda um script python usando o interpretador do venv.
+    Retorna (exit_code, output).
+    """
+    cmd = [VENV_PY, os.path.join(BASE_DIR, py_file)]
+    log_line(f"Executando: {' '.join(cmd)}")
+
+    try:
+        p = subprocess.run(
+            cmd,
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        out = (p.stdout or "") + ("\n" + p.stderr if p.stderr else "")
+        return p.returncode, out.strip()
+    except subprocess.TimeoutExpired:
+        return 124, f"Timeout: {py_file} excedeu {timeout}s"
+    except Exception as e:
+        return 1, f"Erro ao executar {py_file}: {e}"
 
 
-def is_authorized(chat_id):
-    return str(chat_id) == str(CHAT_ID)
+def cmd_status():
+    # mostra últimas linhas do cron.log se existir, senão do bot log
+    cron_log = os.path.join(BASE_DIR, "cron.log")
+    if os.path.exists(cron_log):
+        text = "📌 Últimas linhas do log:\n\n" + tail_log(cron_log, 35)
+    else:
+        text = "📌 Últimas linhas do bot log:\n\n" + tail_log(LOG_FILE, 35)
+
+    tg_send_message(text)
 
 
-# ===============================
-# Loop principal
-# ===============================
+def cmd_dash():
+    code, out = run_script("send_dash_telegram.py", timeout=900)
+    if code == 0:
+        tg_send_message("✅ Dash enviado novamente no Telegram.")
+    else:
+        tg_send_message(f"⛔ Erro ao enviar dash.\n\n{out}")
+
+
+def cmd_dados():
+    code, out = run_script("connect_download.py", timeout=1800)
+    if code == 0:
+        tg_send_message("✅ Dados atualizados (Connect + OneDrive OK).")
+    else:
+        tg_send_message(f"⛔ Erro ao atualizar dados.\n\n{out}")
+
+
+def cmd_powerbi():
+    if not ENABLE_PBI_REFRESH:
+        tg_send_message("ℹ️ Refresh do Power BI está desabilitado (ENABLE_PBI_REFRESH=0).")
+        return
+
+    code, out = run_script("powerbi_refresh.py", timeout=1200)
+    if code == 0:
+        tg_send_message("✅ Power BI refresh disparado/concluído.")
+    else:
+        tg_send_message(f"⛔ Erro no refresh do Power BI.\n\n{out}")
+
+
+def cmd_rodar():
+    """
+    Processo completo:
+    1) Connect download + upload OneDrive
+    2) Power BI refresh (opcional)
+    3) Screenshot e envio no Telegram
+    """
+    tg_send_message("🚀 Iniciando rotina completa (/rodar)...")
+
+    # 1) dados
+    code, out = run_script("connect_download.py", timeout=1800)
+    if code != 0:
+        tg_send_message(f"⛔ Falhou no Connect/OneDrive.\n\n{out}")
+        return
+
+    # 2) powerbi
+    if ENABLE_PBI_REFRESH:
+        code, out = run_script("powerbi_refresh.py", timeout=1200)
+        if code != 0:
+            tg_send_message(f"⚠️ Dados OK, mas falhou Power BI refresh.\nVou tentar enviar o dash mesmo.\n\n{out}")
+
+    # 3) dash
+    code, out = run_script("send_dash_telegram.py", timeout=900)
+    if code == 0:
+        tg_send_message("✅ Rotina concluída! 📊 Rota Atualizada enviada.")
+    else:
+        tg_send_message(f"⛔ Falhou ao gerar/enviar o dash.\n\n{out}")
+
+
+def handle_command(text: str):
+    t = text.strip().lower()
+
+    if t.startswith("/start"):
+        tg_send_message("🤖 Bot Rota Basic ONLINE\n\nComandos:\n/status\n/rodar\n/dados\n/dash\n/powerbi")
+        return
+
+    if t.startswith("/status"):
+        cmd_status()
+        return
+
+    if t.startswith("/rodar"):
+        cmd_rodar()
+        return
+
+    if t.startswith("/dados"):
+        cmd_dados()
+        return
+
+    if t.startswith("/dash"):
+        cmd_dash()
+        return
+
+    if t.startswith("/powerbi"):
+        cmd_powerbi()
+        return
+
+    tg_send_message("Comando não reconhecido. Use /start para ver a lista.")
+
 
 def main():
-    print("Bot iniciado...")
-    send_message("🤖 Bot Rota Basic ONLINE\n\nComandos disponíveis:\n/status\n/rodar\n/dados\n/dash")
+    if not BOT_TOKEN:
+        raise RuntimeError("Defina TELEGRAM_BOT_TOKEN no .env")
+    if not CHAT_ID:
+        raise RuntimeError("Defina TELEGRAM_CHAT_ID no .env")
 
+    log_line("Bot iniciado (polling getUpdates).")
     offset = None
 
     while True:
         try:
-            data = get_updates(offset)
+            r = requests.get(
+                f"{API}/getUpdates",
+                params={"timeout": POLL_TIMEOUT, "offset": offset},
+                timeout=POLL_TIMEOUT + 10,
+            )
+            r.raise_for_status()
+            data = r.json()
 
             if not data.get("ok"):
-                time.sleep(3)
+                time.sleep(SLEEP_ON_ERROR)
                 continue
 
-            for update in data.get("result", []):
-                offset = update["update_id"] + 1
+            for upd in data.get("result", []):
+                offset = upd["update_id"] + 1
 
-                message = update.get("message")
-                if not message:
+                msg = upd.get("message") or upd.get("edited_message")
+                if not msg:
                     continue
 
-                chat_id = message["chat"]["id"]
-                text = message.get("text", "").strip()
+                chat = msg.get("chat", {})
+                chat_id = str(chat.get("id", ""))
 
-                if not is_authorized(chat_id):
+                # Segurança: só responde no chat configurado
+                if chat_id != str(CHAT_ID):
                     continue
 
-                # ===========================
-                # COMANDOS
-                # ===========================
-
-                if text == "/status":
-                    send_message("📌 Últimas linhas do log:\n\n" + tail_log(35))
-
-                elif text == "/rodar":
-                    send_message("🚀 Executando fluxo completo...")
-                    code = run_command(RUN_ALL)
-                    send_message(f"✅ Finalizado. Código: {code}\n\n" + tail_log(25))
-
-                elif text == "/dados":
-                    send_message("⬇️ Atualizando apenas dados (Connect)...")
-                    code = run_command(f"{VENV_PYTHON} {RUN_CONNECT}")
-                    send_message(f"✅ Finalizado. Código: {code}\n\n" + tail_log(25))
-
-                elif text == "/dash":
-                    send_message("📸 Gerando apenas print do dashboard...")
-                    code = run_command(f"{VENV_PYTHON} {RUN_DASH}")
-                    send_message(f"✅ Finalizado. Código: {code}\n\n" + tail_log(20))
+                text = msg.get("text", "")
+                if text.startswith("/"):
+                    log_line(f"CMD recebido: {text}")
+                    handle_command(text)
 
         except Exception as e:
-            try:
-                send_message(f"⚠️ Erro no bot: {e}")
-            except:
-                pass
-
-            time.sleep(5)
+            log_line(f"ERRO polling: {e}")
+            time.sleep(SLEEP_ON_ERROR)
 
 
 if __name__ == "__main__":
