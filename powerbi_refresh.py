@@ -3,8 +3,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-# Carrega .env (evita bug em alguns contextos)
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=False)
+load_dotenv()
 
 TENANT_ID = os.getenv("TENANT_ID")
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -13,12 +12,14 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 GROUP_ID = os.getenv("PBI_GROUP_ID")
 DATASET_ID = os.getenv("PBI_DATASET_ID")
 
-# auth mode: "refresh_token" (delegated) ou "client_credentials" (app permission)
-PBI_AUTH_MODE = (os.getenv("PBI_AUTH_MODE", "refresh_token") or "").strip().lower()
+# auth mode: "client_credentials" (app permission) ou "refresh_token" (delegated)
+PBI_AUTH_MODE = os.getenv("PBI_AUTH_MODE", "client_credentials").strip().lower()
 
+# usado somente no modo refresh_token (delegated)
 PBI_REFRESH_TOKEN = os.getenv("PBI_REFRESH_TOKEN")
 
-PBI_WAIT = (os.getenv("PBI_WAIT", "1") == "1")
+# controle
+PBI_WAIT = os.getenv("PBI_WAIT", "1") == "1"   # espera concluir?
 PBI_POLL_SECONDS = int(os.getenv("PBI_POLL_SECONDS", "10"))
 PBI_TIMEOUT_SECONDS = int(os.getenv("PBI_TIMEOUT_SECONDS", "900"))  # 15 min
 
@@ -28,60 +29,56 @@ def _require_env(name: str, value: str | None):
         raise RuntimeError(f"Defina {name} no .env")
 
 
-def get_access_token_refresh_token_v1() -> str:
-    """
-    Troca refresh_token por access_token usando endpoint v1 + resource.
-    Isso costuma evitar os 400/invalid_grant do v2 quando scope fica chato.
-    """
-    _require_env("TENANT_ID", TENANT_ID)
-    _require_env("CLIENT_ID", CLIENT_ID)
-    _require_env("CLIENT_SECRET", CLIENT_SECRET)
-    _require_env("PBI_REFRESH_TOKEN", PBI_REFRESH_TOKEN)
-
-    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/token"
-    data = {
-        "grant_type": "refresh_token",
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": PBI_REFRESH_TOKEN,
-        "resource": "https://analysis.windows.net/powerbi/api",
-    }
-
-    r = requests.post(url, data=data, timeout=60)
-    if r.status_code != 200:
-        raise RuntimeError(f"⛔ Token endpoint retornou erro:\nSTATUS: {r.status_code}\nBODY: {r.text}")
-    return r.json()["access_token"]
-
-
-def get_access_token_client_credentials_v2() -> str:
-    """
-    Client Credentials (APLICATIVO) — só funciona se você tiver
-    Application Permission no Power BI (não é o seu caso agora).
-    """
+def get_access_token_client_credentials() -> str:
     _require_env("TENANT_ID", TENANT_ID)
     _require_env("CLIENT_ID", CLIENT_ID)
     _require_env("CLIENT_SECRET", CLIENT_SECRET)
 
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
     data = {
-        "grant_type": "client_credentials",
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
+        "grant_type": "client_credentials",
         "scope": "https://analysis.windows.net/powerbi/api/.default",
     }
 
     r = requests.post(url, data=data, timeout=60)
     if r.status_code != 200:
         raise RuntimeError(f"⛔ Token endpoint retornou erro:\nSTATUS: {r.status_code}\nBODY: {r.text}")
+
+    return r.json()["access_token"]
+
+
+def get_access_token_refresh_token() -> str:
+    # Só use isso se você quiser voltar pro modo delegated (não recomendo no seu caso agora)
+    _require_env("TENANT_ID", TENANT_ID)
+    _require_env("CLIENT_ID", CLIENT_ID)
+    _require_env("CLIENT_SECRET", CLIENT_SECRET)
+    _require_env("PBI_REFRESH_TOKEN", PBI_REFRESH_TOKEN)
+
+    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+    data = {
+        "grant_type": "refresh_token",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "refresh_token": PBI_REFRESH_TOKEN,
+        # Para delegated, o scope precisa ser o recurso + offline_access, mas o seu caso é app permission.
+        "scope": "https://analysis.windows.net/powerbi/api/Dataset.ReadWrite.All offline_access",
+    }
+
+    r = requests.post(url, data=data, timeout=60)
+    if r.status_code != 200:
+        raise RuntimeError(f"⛔ Token endpoint retornou erro:\nSTATUS: {r.status_code}\nBODY: {r.text}")
+
     return r.json()["access_token"]
 
 
 def get_access_token() -> str:
     if PBI_AUTH_MODE == "client_credentials":
-        return get_access_token_client_credentials_v2()
+        return get_access_token_client_credentials()
     if PBI_AUTH_MODE == "refresh_token":
-        return get_access_token_refresh_token_v1()
-    raise RuntimeError("PBI_AUTH_MODE inválido. Use refresh_token ou client_credentials.")
+        return get_access_token_refresh_token()
+    raise RuntimeError("PBI_AUTH_MODE inválido. Use client_credentials ou refresh_token.")
 
 
 def trigger_refresh(token: str) -> None:
@@ -94,6 +91,7 @@ def trigger_refresh(token: str) -> None:
     r = requests.post(url, headers=headers, timeout=60)
     if r.status_code not in (200, 202):
         raise RuntimeError(f"⛔ Falha ao disparar refresh:\nSTATUS: {r.status_code}\nBODY: {r.text}")
+
     print("✅ Power BI: refresh disparado.")
 
 
@@ -105,8 +103,8 @@ def wait_for_refresh(token: str) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     print("⏳ Power BI: aguardando concluir refresh...")
-    t0 = time.time()
 
+    t0 = time.time()
     while True:
         if time.time() - t0 > PBI_TIMEOUT_SECONDS:
             raise RuntimeError("⛔ Timeout esperando refresh do Power BI.")
@@ -115,7 +113,13 @@ def wait_for_refresh(token: str) -> None:
         if r.status_code != 200:
             raise RuntimeError(f"⛔ Falha ao consultar refresh:\nSTATUS: {r.status_code}\nBODY: {r.text}")
 
-        status = r.json()["value"][0]["status"]
+        items = r.json().get("value", [])
+        if not items:
+            print("⚠️ Sem histórico de refresh ainda. Aguardando...")
+            time.sleep(PBI_POLL_SECONDS)
+            continue
+
+        status = items[0].get("status")
         print("Status:", status)
 
         if status == "Completed":
