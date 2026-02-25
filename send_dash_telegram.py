@@ -5,22 +5,25 @@ from dotenv import load_dotenv
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 load_dotenv()
 
-# ====== ENV ======
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 DASH_URL = os.getenv("DASH_URL")
-
-# Caminho do PNG no VPS (padrão ok)
 OUT_PNG = os.getenv("DASH_PNG", "/root/rota-basic/downloads/rota_dash.png")
 
-# Qualidade / tamanho do print
-WINDOW_W = int(os.getenv("DASH_W", "1920"))          # pode mudar pra 2560
-WINDOW_H = int(os.getenv("DASH_H", "1080"))          # pode mudar pra 1440
-SCALE = float(os.getenv("DASH_SCALE", "2"))          # 2 = bem melhor
-WAIT_SECONDS = int(os.getenv("DASH_WAIT", "15"))     # Power BI pode precisar mais
+# qualidade
+WINDOW_W = int(os.getenv("DASH_W", "2560"))
+WINDOW_H = int(os.getenv("DASH_H", "1440"))
+SCALE = float(os.getenv("DASH_SCALE", "2.5"))     # sobe pra 3 se quiser
+WAIT_SECONDS = int(os.getenv("DASH_WAIT", "20"))
+
+# zoom do Power BI dentro do iframe (1.0=100%, 1.25=125%, 1.5=150%)
+PBI_ZOOM = float(os.getenv("PBI_ZOOM", "1.25"))
 
 if not BOT_TOKEN:
     raise RuntimeError("Defina TELEGRAM_BOT_TOKEN no .env")
@@ -32,38 +35,66 @@ if not DASH_URL:
 os.makedirs(os.path.dirname(OUT_PNG), exist_ok=True)
 
 
-def screenshot_powerbi_view(url: str, out_png: str) -> None:
+def build_driver() -> webdriver.Chrome:
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
 
-    # Qualidade alta (resolução + “DPI”)
     chrome_options.add_argument(f"--window-size={WINDOW_W},{WINDOW_H}")
     chrome_options.add_argument(f"--force-device-scale-factor={SCALE}")
     chrome_options.add_argument("--high-dpi-support=1")
+    return webdriver.Chrome(options=chrome_options)
 
-    driver = webdriver.Chrome(options=chrome_options)
+
+def screenshot_powerbi_view(url: str, out_png: str) -> None:
+    driver = build_driver()
+    wait = WebDriverWait(driver, 60)
+
     try:
         driver.get(url)
 
-        # Espera render do Power BI
+        # aguarda carregar a página base
         time.sleep(WAIT_SECONDS)
 
-        # Força reflow/render
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(2)
+        # tenta achar iframe do Power BI e entrar nele
+        iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
+        driver.switch_to.frame(iframe)
 
-        driver.save_screenshot(out_png)
+        # força zoom dentro do iframe (isso costuma corrigir o 78%)
+        # (quando o browser está em 100% mas o report renderiza menor)
+        driver.execute_script(f"document.body.style.zoom = '{PBI_ZOOM}';")
+        time.sleep(3)
+
+        # tenta encontrar a área principal do report e tirar screenshot só dela
+        # (seletores variam; esses 2 cobrem a maioria dos embeds)
+        candidates = [
+            (By.CSS_SELECTOR, "visual-container, .visualContainer"),
+            (By.CSS_SELECTOR, ".report, .reportContainer, .canvasContainer, .pv-visualContainer"),
+            (By.CSS_SELECTOR, "body"),
+        ]
+
+        target = None
+        for by, sel in candidates:
+            els = driver.find_elements(by, sel)
+            if els:
+                target = els[0]
+                break
+
+        if target:
+            target.screenshot(out_png)
+        else:
+            driver.save_screenshot(out_png)
+
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except Exception:
+            pass
 
 
 def send_telegram_document(bot_token: str, chat_id: str, file_path: str, caption: str = "") -> None:
-    """
-    Envia como DOCUMENTO (sem compressão do Telegram) => melhor qualidade.
-    """
     url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
     with open(file_path, "rb") as f:
         r = requests.post(
