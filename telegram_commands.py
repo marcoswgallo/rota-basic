@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 import subprocess
 import requests
 from datetime import datetime
@@ -20,9 +21,30 @@ LOG_FILE = os.getenv("BOT_LOG_FILE", f"{BASE_DIR}/bot_commands.log")
 POLL_TIMEOUT = int(os.getenv("POLL_TIMEOUT", "50"))
 SLEEP_ON_ERROR = int(os.getenv("SLEEP_ON_ERROR", "3"))
 
-# Liga/desliga refresh do Power BI durante /rodar
 ENABLE_PBI_REFRESH = os.getenv("ENABLE_PBI_REFRESH", "1") == "1"
 
+# ─────────────────────────────────────────────
+# Controle de tarefa em andamento (evita rodar
+# dois comandos pesados ao mesmo tempo)
+# ─────────────────────────────────────────────
+_running_lock = threading.Lock()
+_running_task: str | None = None   # nome da tarefa em andamento
+
+
+def _set_running(name: str | None):
+    global _running_task
+    with _running_lock:
+        _running_task = name
+
+
+def _get_running() -> str | None:
+    with _running_lock:
+        return _running_task
+
+
+# ─────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────
 
 def log_line(msg: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -36,11 +58,14 @@ def log_line(msg: str):
 
 
 def tg_send_message(text: str):
-    requests.post(
-        f"{API}/sendMessage",
-        data={"chat_id": CHAT_ID, "text": text},
-        timeout=60
-    )
+    try:
+        requests.post(
+            f"{API}/sendMessage",
+            data={"chat_id": CHAT_ID, "text": text},
+            timeout=30,
+        )
+    except Exception as e:
+        log_line(f"Erro ao enviar mensagem Telegram: {e}")
 
 
 def tail_log(path: str, lines: int = 30) -> str:
@@ -71,108 +96,168 @@ def run_script(py_file: str, timeout: int = 1800) -> tuple[int, str]:
         out = (p.stdout or "") + ("\n" + p.stderr if p.stderr else "")
         return p.returncode, out.strip()
     except subprocess.TimeoutExpired:
-        return 124, f"Timeout: {py_file} excedeu {timeout}s"
+        return 124, f"⏰ Timeout: {py_file} excedeu {timeout}s"
     except Exception as e:
         return 1, f"Erro ao executar {py_file}: {e}"
 
 
+# ─────────────────────────────────────────────
+# Comandos
+# ─────────────────────────────────────────────
+
 def cmd_status():
-    # mostra últimas linhas do cron.log se existir, senão do bot log
+    running = _get_running()
+    status_extra = f"\n\n🔄 Tarefa em andamento: {running}" if running else "\n\n💤 Nenhuma tarefa rodando."
+
     cron_log = os.path.join(BASE_DIR, "cron.log")
     if os.path.exists(cron_log):
         text = "📌 Últimas linhas do log:\n\n" + tail_log(cron_log, 35)
     else:
         text = "📌 Últimas linhas do bot log:\n\n" + tail_log(LOG_FILE, 35)
 
-    tg_send_message(text)
+    tg_send_message(text + status_extra)
 
 
-def cmd_dash():
-    code, out = run_script("send_dash_telegram.py", timeout=900)
-    if code == 0:
-        tg_send_message("✅ Dash enviado novamente no Telegram.")
+def cmd_ping():
+    running = _get_running()
+    if running:
+        tg_send_message(f"🟡 Bot está vivo — processando: {running}")
     else:
-        tg_send_message(f"⛔ Erro ao enviar dash.\n\n{out}")
+        tg_send_message("🟢 Bot respondendo normalmente. Nenhuma tarefa em andamento.")
 
 
-def cmd_dados():
-    code, out = run_script("connect_download.py", timeout=1800)
-    if code == 0:
-        tg_send_message("✅ Dados atualizados (Connect + OneDrive OK).")
-    else:
-        tg_send_message(f"⛔ Erro ao atualizar dados.\n\n{out}")
+def _run_dash():
+    _set_running("/dash")
+    try:
+        code, out = run_script("send_dash_telegram.py", timeout=900)
+        if code == 0:
+            tg_send_message("✅ Dash enviado com sucesso!")
+        else:
+            tg_send_message(f"⛔ Erro ao enviar dash.\n\n{out[-1000:]}")
+    finally:
+        _set_running(None)
 
 
-def cmd_powerbi():
-    if not ENABLE_PBI_REFRESH:
-        tg_send_message("ℹ️ Refresh do Power BI está desabilitado (ENABLE_PBI_REFRESH=0).")
-        return
+def _run_dados():
+    _set_running("/dados")
+    try:
+        code, out = run_script("connect_download.py", timeout=1800)
+        if code == 0:
+            tg_send_message("✅ Dados atualizados (Connect + OneDrive OK).")
+        else:
+            tg_send_message(f"⛔ Erro ao atualizar dados.\n\n{out[-1000:]}")
+    finally:
+        _set_running(None)
 
-    code, out = run_script("powerbi_refresh.py", timeout=1200)
-    if code == 0:
-        tg_send_message("✅ Power BI refresh disparado/concluído.")
-    else:
-        tg_send_message(f"⛔ Erro no refresh do Power BI.\n\n{out}")
+
+def _run_powerbi():
+    _set_running("/powerbi")
+    try:
+        if not ENABLE_PBI_REFRESH:
+            tg_send_message("ℹ️ Refresh do Power BI está desabilitado (ENABLE_PBI_REFRESH=0).")
+            return
+        code, out = run_script("powerbi_refresh.py", timeout=1200)
+        if code == 0:
+            tg_send_message("✅ Power BI refresh concluído.")
+        else:
+            tg_send_message(f"⛔ Erro no refresh do Power BI.\n\n{out[-1000:]}")
+    finally:
+        _set_running(None)
 
 
-def cmd_rodar():
+def _run_rodar():
     """
     Processo completo:
     1) Connect download + upload OneDrive
     2) Power BI refresh (opcional)
     3) Screenshot e envio no Telegram
     """
-    tg_send_message("🚀 Iniciando rotina completa (/rodar)...")
-
-    # 1) dados
-    code, out = run_script("connect_download.py", timeout=1800)
-    if code != 0:
-        tg_send_message(f"⛔ Falhou no Connect/OneDrive.\n\n{out}")
-        return
-
-    # 2) powerbi
-    if ENABLE_PBI_REFRESH:
-        code, out = run_script("powerbi_refresh.py", timeout=1200)
+    _set_running("/rodar")
+    try:
+        tg_send_message("🚀 [1/3] Baixando dados do Connect e subindo para OneDrive...")
+        code, out = run_script("connect_download.py", timeout=1800)
         if code != 0:
-            tg_send_message(f"⚠️ Dados OK, mas falhou Power BI refresh.\nVou tentar enviar o dash mesmo.\n\n{out}")
+            tg_send_message(f"⛔ Falhou no Connect/OneDrive.\n\n{out[-1000:]}")
+            return
 
-    # 3) dash
-    code, out = run_script("send_dash_telegram.py", timeout=900)
-    if code == 0:
-        tg_send_message("✅ Rotina concluída! 📊 Rota Atualizada enviada.")
-    else:
-        tg_send_message(f"⛔ Falhou ao gerar/enviar o dash.\n\n{out}")
+        if ENABLE_PBI_REFRESH:
+            tg_send_message("🔄 [2/3] Disparando refresh no Power BI...")
+            code, out = run_script("powerbi_refresh.py", timeout=1200)
+            if code != 0:
+                tg_send_message(f"⚠️ Dados OK, mas Power BI falhou. Seguindo para o dash...\n\n{out[-500:]}")
+        else:
+            tg_send_message("⏭️ [2/3] Power BI refresh desabilitado. Pulando...")
+
+        tg_send_message("📸 [3/3] Capturando e enviando dashboard...")
+        code, out = run_script("send_dash_telegram.py", timeout=900)
+        if code == 0:
+            tg_send_message("✅ Rotina concluída! 📊 Dashboard atualizado enviado.")
+        else:
+            tg_send_message(f"⛔ Falhou ao gerar/enviar o dash.\n\n{out[-1000:]}")
+    finally:
+        _set_running(None)
+
+
+# ─────────────────────────────────────────────
+# Dispatcher de comandos
+# ─────────────────────────────────────────────
+
+# Comandos pesados que rodam em thread separada
+HEAVY_COMMANDS = {
+    "/rodar": _run_rodar,
+    "/dados": _run_dados,
+    "/dash": _run_dash,
+    "/powerbi": _run_powerbi,
+}
 
 
 def handle_command(text: str):
     t = text.strip().lower()
 
+    # ── Comandos leves (respondem na hora) ──
     if t.startswith("/start"):
-        tg_send_message("🤖 Bot Rota Basic ONLINE\n\nComandos:\n/status\n/rodar\n/dados\n/dash\n/powerbi")
+        tg_send_message(
+            "🤖 *Bot Rota Basic ONLINE*\n\n"
+            "Comandos disponíveis:\n"
+            "/rodar — rotina completa\n"
+            "/dados — só baixa Connect + OneDrive\n"
+            "/dash — só captura e envia dashboard\n"
+            "/powerbi — só refresh do Power BI\n"
+            "/status — últimas linhas do log\n"
+            "/ping — verifica se o bot está vivo"
+        )
         return
 
     if t.startswith("/status"):
         cmd_status()
         return
 
-    if t.startswith("/rodar"):
-        cmd_rodar()
+    if t.startswith("/ping"):
+        cmd_ping()
         return
 
-    if t.startswith("/dados"):
-        cmd_dados()
-        return
+    # ── Comandos pesados (rodam em thread separada) ──
+    for cmd, func in HEAVY_COMMANDS.items():
+        if t.startswith(cmd):
+            running = _get_running()
+            if running:
+                tg_send_message(
+                    f"⚠️ Já existe uma tarefa em andamento: {running}\n"
+                    f"Use /ping para checar o status ou aguarde terminar."
+                )
+                return
 
-    if t.startswith("/dash"):
-        cmd_dash()
-        return
-
-    if t.startswith("/powerbi"):
-        cmd_powerbi()
-        return
+            tg_send_message(f"⏳ Comando {cmd} recebido. Iniciando...")
+            thread = threading.Thread(target=func, daemon=True, name=cmd)
+            thread.start()
+            return
 
     tg_send_message("Comando não reconhecido. Use /start para ver a lista.")
 
+
+# ─────────────────────────────────────────────
+# Loop principal (polling)
+# ─────────────────────────────────────────────
 
 def main():
     if not BOT_TOKEN:

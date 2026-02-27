@@ -19,12 +19,18 @@ PBI_WAIT = os.getenv("PBI_WAIT", "1") == "1"
 PBI_POLL_SECONDS = int(os.getenv("PBI_POLL_SECONDS", "10"))
 PBI_TIMEOUT_SECONDS = int(os.getenv("PBI_TIMEOUT_SECONDS", "900"))
 
+# Status finais conhecidos do Power BI
+STATUS_FINAL_OK = {"Completed"}
+STATUS_FINAL_ERRO = {"Failed", "Cancelled", "Disabled"}
+# Se chegar nestes status, não adianta esperar mais
+STATUS_FINAL_TODOS = STATUS_FINAL_OK | STATUS_FINAL_ERRO
+
 
 # -------------------------
 # Helpers
 # -------------------------
 
-def _require_env(name: str, value: str | None):
+def _require_env(name: str, value):
     if not value:
         raise RuntimeError(f"Defina {name} no .env")
 
@@ -39,7 +45,6 @@ def get_access_token_client_credentials() -> str:
     _require_env("CLIENT_SECRET", CLIENT_SECRET)
 
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
-
     data = {
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
@@ -48,12 +53,10 @@ def get_access_token_client_credentials() -> str:
     }
 
     r = requests.post(url, data=data, timeout=60)
-
     if r.status_code != 200:
         raise RuntimeError(
             f"⛔ Token endpoint retornou erro:\nSTATUS: {r.status_code}\nBODY: {r.text}"
         )
-
     return r.json()["access_token"]
 
 
@@ -64,7 +67,6 @@ def get_access_token_refresh_token() -> str:
     _require_env("PBI_REFRESH_TOKEN", PBI_REFRESH_TOKEN)
 
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
-
     data = {
         "grant_type": "refresh_token",
         "client_id": CLIENT_ID,
@@ -74,12 +76,10 @@ def get_access_token_refresh_token() -> str:
     }
 
     r = requests.post(url, data=data, timeout=60)
-
     if r.status_code != 200:
         raise RuntimeError(
             f"⛔ Token endpoint retornou erro:\nSTATUS: {r.status_code}\nBODY: {r.text}"
         )
-
     return r.json()["access_token"]
 
 
@@ -88,11 +88,11 @@ def get_access_token() -> str:
         return get_access_token_client_credentials()
     if PBI_AUTH_MODE == "refresh_token":
         return get_access_token_refresh_token()
-    raise RuntimeError("PBI_AUTH_MODE inválido.")
+    raise RuntimeError(f"PBI_AUTH_MODE inválido: '{PBI_AUTH_MODE}'. Use 'client_credentials' ou 'refresh_token'.")
 
 
 # -------------------------
-# REFRESH
+# TRIGGER REFRESH
 # -------------------------
 
 def trigger_refresh(token: str) -> None:
@@ -105,14 +105,12 @@ def trigger_refresh(token: str) -> None:
     max_attempts = 5
 
     for attempt in range(1, max_attempts + 1):
-
         r = requests.post(url, headers=headers, timeout=60)
 
         if r.status_code in (200, 202):
             print("✅ Power BI: refresh disparado.")
             return
 
-        # --------- RATE LIMIT ----------
         if r.status_code == 429:
             retry_after = r.headers.get("Retry-After")
             wait_seconds = int(retry_after) if retry_after and retry_after.isdigit() else 120
@@ -138,18 +136,21 @@ def wait_for_refresh(token: str) -> None:
     url = f"https://api.powerbi.com/v1.0/myorg/groups/{GROUP_ID}/datasets/{DATASET_ID}/refreshes?$top=1"
     headers = {"Authorization": f"Bearer {token}"}
 
-    print("⏳ Power BI: aguardando concluir refresh...")
+    print(f"⏳ Power BI: aguardando refresh concluir (timeout: {PBI_TIMEOUT_SECONDS}s)...")
 
     t0 = time.time()
+    consecutive_unknown = 0  # conta status desconhecidos consecutivos
 
     while True:
+        elapsed = time.time() - t0
 
-        if time.time() - t0 > PBI_TIMEOUT_SECONDS:
-            raise RuntimeError("⛔ Timeout esperando refresh do Power BI.")
+        if elapsed > PBI_TIMEOUT_SECONDS:
+            raise RuntimeError(
+                f"⛔ Timeout após {PBI_TIMEOUT_SECONDS}s esperando refresh do Power BI."
+            )
 
         r = requests.get(url, headers=headers, timeout=60)
 
-        # tratar rate limit também aqui
         if r.status_code == 429:
             retry_after = r.headers.get("Retry-After")
             wait_seconds = int(retry_after) if retry_after and retry_after.isdigit() else 30
@@ -169,15 +170,31 @@ def wait_for_refresh(token: str) -> None:
             time.sleep(PBI_POLL_SECONDS)
             continue
 
-        status = items[0].get("status")
-        print("Status:", status)
+        status = items[0].get("status", "Unknown")
+        print(f"Status: {status} ({int(elapsed)}s decorridos)")
 
+        # ─── CORREÇÃO: status de sucesso ───
         if status == "Completed":
-            print("✅ Power BI: refresh concluído.")
+            print("✅ Power BI: refresh concluído com sucesso.")
             return
 
-        if status == "Failed":
-            raise RuntimeError("⛔ Power BI: refresh falhou.")
+        # ─── CORREÇÃO: status de erro definitivo ───
+        if status in STATUS_FINAL_ERRO:
+            error_info = items[0].get("serviceExceptionJson", "")
+            raise RuntimeError(
+                f"⛔ Power BI: refresh terminou com status '{status}'.\n{error_info}"
+            )
+
+        # ─── CORREÇÃO: status desconhecido — não trava para sempre ───
+        if status not in ("Unknown", "InProgress"):
+            consecutive_unknown += 1
+            print(f"⚠️ Status inesperado '{status}' ({consecutive_unknown}x consecutivo).")
+            if consecutive_unknown >= 5:
+                raise RuntimeError(
+                    f"⛔ Status inesperado '{status}' por 5 ciclos consecutivos. Abortando."
+                )
+        else:
+            consecutive_unknown = 0  # reset ao ver status conhecido
 
         time.sleep(PBI_POLL_SECONDS)
 
