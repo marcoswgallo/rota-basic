@@ -2,3 +2,5 @@ selenium
 python-dotenv
 requests
 msal
+Pillow
+numpy

@@ -1,185 +1,172 @@
 """
 send_dash_telegram.py
 ─────────────────────
-Exporta uma página do relatório Power BI como PNG via API oficial
-e envia para o Telegram — sem Selenium, sem Chrome.
-
-Variáveis obrigatórias no .env:
-  TELEGRAM_BOT_TOKEN
-  TELEGRAM_CHAT_ID
-  PBI_GROUP_ID       (Workspace ID)
-  PBI_REPORT_ID      (Report ID)
-
-  + autenticação (igual ao powerbi_refresh.py):
-  TENANT_ID, CLIENT_ID, CLIENT_SECRET
-  PBI_AUTH_MODE      (client_credentials ou refresh_token)
-  PBI_REFRESH_TOKEN  (só se PBI_AUTH_MODE=refresh_token)
-
-Variáveis opcionais:
-  PBI_REPORT_PAGE    (nome da página, ex: "ReportSection1" — deixe vazio para página ativa)
-  PBI_EXPORT_TIMEOUT (segundos máx aguardando export, padrão 120)
-  PBI_POLL_SECONDS   (intervalo de polling, padrão 5)
-  DASH_PNG           (caminho local para salvar o PNG)
-  DASH_CAPTION       (legenda no Telegram)
+Captura o dashboard do Power BI via Selenium,
+corta automaticamente o espaço em branco com Pillow
+e envia para o Telegram.
 """
 
 import os
 import time
 import requests
+import numpy as np
+from PIL import Image
 from dotenv import load_dotenv
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 
 load_dotenv()
 
-# ─── Telegram ───
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID")
+# ===== ENV =====
+BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID      = os.getenv("TELEGRAM_CHAT_ID")
+DASH_URL     = os.getenv("DASH_URL")
+OUT_PNG      = os.getenv("DASH_PNG", "/root/rota-basic/downloads/rota_dash.png")
+CAPTION      = os.getenv("DASH_CAPTION", "📊 Rota Inicial - Atualizado")
 
-# ─── Power BI ───
-TENANT_ID         = os.getenv("TENANT_ID")
-CLIENT_ID         = os.getenv("CLIENT_ID")
-CLIENT_SECRET     = os.getenv("CLIENT_SECRET")
-PBI_AUTH_MODE     = os.getenv("PBI_AUTH_MODE", "client_credentials").strip().lower()
-PBI_REFRESH_TOKEN = os.getenv("PBI_REFRESH_TOKEN")
+# ===== CONFIG =====
+WINDOW_W          = int(os.getenv("DASH_W", "1920"))
+WINDOW_H          = int(os.getenv("DASH_H", "1080"))
+SCALE             = float(os.getenv("DASH_SCALE", "2"))
+WAIT_SECONDS      = int(os.getenv("DASH_WAIT", "35"))
+PBI_ZOOM          = float(os.getenv("PBI_ZOOM", "1.0"))
+PAGE_LOAD_TIMEOUT = int(os.getenv("PAGE_LOAD_TIMEOUT", "90"))
 
-GROUP_ID          = os.getenv("PBI_GROUP_ID")
-REPORT_ID         = os.getenv("PBI_REPORT_ID")
-REPORT_PAGE       = os.getenv("PBI_REPORT_PAGE", "")   # vazio = página ativa
+# Margem extra mantida após o corte (px)
+CROP_PADDING = int(os.getenv("CROP_PADDING", "20"))
+# Tolerância de cor para considerar "fundo branco/cinza claro" (0-255)
+CROP_THRESHOLD = int(os.getenv("CROP_THRESHOLD", "240"))
 
-EXPORT_TIMEOUT    = int(os.getenv("PBI_EXPORT_TIMEOUT", "120"))
-POLL_SECONDS      = int(os.getenv("PBI_POLL_SECONDS", "5"))
-
-# ─── Saída ───
-OUT_PNG = os.getenv("DASH_PNG", "/root/rota-basic/downloads/rota_dash.png")
-CAPTION = os.getenv("DASH_CAPTION", "📊 Rota Inicial - Atualizado")
+if not BOT_TOKEN:
+    raise RuntimeError("Defina TELEGRAM_BOT_TOKEN no .env")
+if not CHAT_ID:
+    raise RuntimeError("Defina TELEGRAM_CHAT_ID no .env")
+if not DASH_URL:
+    raise RuntimeError("Defina DASH_URL no .env")
 
 os.makedirs(os.path.dirname(OUT_PNG), exist_ok=True)
 
 
-# ════════════════════════════════════════
-# AUTH
-# ════════════════════════════════════════
+# ════════════════════════════════════
+# SELENIUM
+# ════════════════════════════════════
 
-def _require(name: str, value):
-    if not value:
-        raise RuntimeError(f"Defina {name} no .env")
+def build_driver():
+    opts = Options()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument(f"--window-size={WINDOW_W},{WINDOW_H}")
+    opts.add_argument(f"--force-device-scale-factor={SCALE}")
+    opts.add_argument("--high-dpi-support=1")
 
-
-def get_access_token() -> str:
-    _require("TENANT_ID", TENANT_ID)
-    _require("CLIENT_ID", CLIENT_ID)
-    _require("CLIENT_SECRET", CLIENT_SECRET)
-
-    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
-    scope = "https://analysis.windows.net/powerbi/api/.default"
-
-    if PBI_AUTH_MODE == "refresh_token":
-        _require("PBI_REFRESH_TOKEN", PBI_REFRESH_TOKEN)
-        data = {
-            "grant_type": "refresh_token",
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "refresh_token": PBI_REFRESH_TOKEN,
-            "scope": scope,
-        }
-    else:
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "scope": scope,
-        }
-
-    r = requests.post(url, data=data, timeout=30)
-    if r.status_code != 200:
-        raise RuntimeError(f"⛔ Erro ao obter token:\n{r.status_code} - {r.text}")
-    return r.json()["access_token"]
+    driver = webdriver.Chrome(options=opts)
+    driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
+    return driver
 
 
-# ════════════════════════════════════════
-# EXPORT PNG via API do Power BI
-# ════════════════════════════════════════
+def take_screenshot(url: str, raw_png: str):
+    driver = build_driver()
+    try:
+        print(f"Abrindo dashboard (timeout: {PAGE_LOAD_TIMEOUT}s)...")
+        driver.get(url)
 
-def export_report_png(token: str) -> bytes:
+        print(f"Aguardando {WAIT_SECONDS}s para renderizar...")
+        time.sleep(WAIT_SECONDS)
+
+        if PBI_ZOOM != 1.0:
+            driver.execute_script(f"document.body.style.zoom = '{PBI_ZOOM}'")
+            time.sleep(2)
+
+        # Ajusta altura para capturar todo o conteúdo
+        try:
+            total_h = driver.execute_script(
+                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);"
+            )
+            if isinstance(total_h, (int, float)) and total_h > WINDOW_H:
+                driver.set_window_size(WINDOW_W, int(min(total_h, 4500)))
+                time.sleep(1)
+        except Exception:
+            pass
+
+        # Tenta capturar container principal do PBI
+        candidates = [
+            (By.CSS_SELECTOR, "div.reportContainer"),
+            (By.CSS_SELECTOR, "div.canvasContainer"),
+            (By.CSS_SELECTOR, "div[role='main']"),
+            (By.TAG_NAME, "body"),
+        ]
+        target = None
+        for by, sel in candidates:
+            els = driver.find_elements(by, sel)
+            if els:
+                target = els[0]
+                break
+
+        if target:
+            target.screenshot(raw_png)
+        else:
+            driver.save_screenshot(raw_png)
+
+        print(f"Screenshot salvo: {raw_png}")
+
+    except Exception as e:
+        try:
+            driver.save_screenshot(raw_png.replace(".png", "_erro.png"))
+        except Exception:
+            pass
+        raise RuntimeError(f"Erro no screenshot: {e}") from e
+    finally:
+        driver.quit()
+
+
+# ════════════════════════════════════
+# CROP AUTOMÁTICO COM PILLOW
+# ════════════════════════════════════
+
+def autocrop(input_png: str, output_png: str):
     """
-    Usa a API exportTo do Power BI para gerar um PNG do relatório.
-    Faz polling até o export ficar pronto e retorna os bytes da imagem.
+    Remove bordas com fundo claro (branco/cinza) ao redor do conteúdo.
+    Mantém uma margem de CROP_PADDING px para não cortar rente.
     """
-    _require("PBI_GROUP_ID", GROUP_ID)
-    _require("PBI_REPORT_ID", REPORT_ID)
+    img = Image.open(input_png).convert("RGB")
+    arr = np.array(img)
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+    # Máscara: pixel é "fundo" se todos os canais >= threshold
+    bg_mask = np.all(arr >= CROP_THRESHOLD, axis=2)
 
-    base_url = f"https://api.powerbi.com/v1.0/myorg/groups/{GROUP_ID}/reports/{REPORT_ID}"
+    # Linhas e colunas que têm pelo menos 1 pixel de conteúdo
+    rows_with_content = np.where(~bg_mask.all(axis=1))[0]
+    cols_with_content = np.where(~bg_mask.all(axis=0))[0]
 
-    # ── Monta o body do export ──
-    body = {"format": "PNG"}
+    if len(rows_with_content) == 0 or len(cols_with_content) == 0:
+        print("⚠️ Autocrop não encontrou conteúdo — usando imagem original.")
+        img.save(output_png)
+        return
 
-    if REPORT_PAGE:
-        body["powerBIReportConfiguration"] = {
-            "pages": [{"pageName": REPORT_PAGE}]
-        }
+    top    = max(0,          rows_with_content[0]  - CROP_PADDING)
+    bottom = min(img.height, rows_with_content[-1] + CROP_PADDING + 1)
+    left   = max(0,          cols_with_content[0]  - CROP_PADDING)
+    right  = min(img.width,  cols_with_content[-1] + CROP_PADDING + 1)
 
-    # ── 1) Dispara o export ──
-    print(f"Disparando export PNG do relatório {REPORT_ID}...")
-    r = requests.post(f"{base_url}/ExportTo", headers=headers, json=body, timeout=60)
+    cropped = img.crop((left, top, right, bottom))
+    cropped.save(output_png)
 
-    if r.status_code not in (200, 202):
-        raise RuntimeError(f"⛔ Falha ao iniciar export:\n{r.status_code} - {r.text}")
-
-    export_id = r.json().get("id")
-    if not export_id:
-        raise RuntimeError("⛔ API não retornou export ID.")
-
-    print(f"Export iniciado. ID: {export_id}")
-
-    # ── 2) Polling até ficar pronto ──
-    status_url = f"{base_url}/exports/{export_id}"
-    t0 = time.time()
-
-    while True:
-        elapsed = time.time() - t0
-        if elapsed > EXPORT_TIMEOUT:
-            raise TimeoutError(f"⛔ Timeout de {EXPORT_TIMEOUT}s aguardando export.")
-
-        time.sleep(POLL_SECONDS)
-
-        sr = requests.get(status_url, headers=headers, timeout=30)
-        if sr.status_code != 200:
-            raise RuntimeError(f"⛔ Erro ao consultar status:\n{sr.status_code} - {sr.text}")
-
-        status_data = sr.json()
-        status  = status_data.get("status", "")
-        percent = status_data.get("percentComplete", 0)
-
-        print(f"Status: {status} — {percent}% ({int(elapsed)}s)")
-
-        if status == "Succeeded":
-            break
-        if status == "Failed":
-            raise RuntimeError(f"⛔ Export falhou:\n{status_data}")
-
-    # ── 3) Baixa o arquivo ──
-    print("Export concluído! Baixando PNG...")
-    file_url = f"{base_url}/exports/{export_id}/file"
-    fr = requests.get(file_url, headers=headers, timeout=60)
-
-    if fr.status_code != 200:
-        raise RuntimeError(f"⛔ Erro ao baixar arquivo:\n{fr.status_code} - {fr.text}")
-
-    print(f"PNG baixado ({len(fr.content) / 1024:.1f} KB).")
-    return fr.content
+    orig_w, orig_h   = img.size
+    crop_w = right - left
+    crop_h = bottom - top
+    print(f"✅ Autocrop: {orig_w}x{orig_h} → {crop_w}x{crop_h} px")
 
 
-# ════════════════════════════════════════
+# ════════════════════════════════════
 # TELEGRAM
-# ════════════════════════════════════════
+# ════════════════════════════════════
 
 def send_telegram_photo(file_path: str, caption: str = ""):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-
     with open(file_path, "rb") as f:
         r = requests.post(
             url,
@@ -187,29 +174,33 @@ def send_telegram_photo(file_path: str, caption: str = ""):
             files={"photo": f},
             timeout=120,
         )
-
     if not r.ok:
         raise RuntimeError(f"⛔ Erro Telegram: {r.status_code} - {r.text}")
-
     print("✅ Imagem enviada para o Telegram.")
 
 
-# ════════════════════════════════════════
+# ════════════════════════════════════
 # MAIN
-# ════════════════════════════════════════
+# ════════════════════════════════════
 
 def main():
-    _require("TELEGRAM_BOT_TOKEN", BOT_TOKEN)
-    _require("TELEGRAM_CHAT_ID", CHAT_ID)
+    raw_png    = OUT_PNG.replace(".png", "_raw.png")
+    final_png  = OUT_PNG
 
-    token = get_access_token()
-    png_bytes = export_report_png(token)
+    # 1) Screenshot
+    take_screenshot(DASH_URL, raw_png)
 
-    with open(OUT_PNG, "wb") as f:
-        f.write(png_bytes)
-    print(f"PNG salvo em: {OUT_PNG}")
+    # 2) Corte automático
+    autocrop(raw_png, final_png)
 
-    send_telegram_photo(OUT_PNG, CAPTION)
+    # 3) Limpa o raw
+    try:
+        os.remove(raw_png)
+    except Exception:
+        pass
+
+    # 4) Envia
+    send_telegram_photo(final_png, CAPTION)
 
 
 if __name__ == "__main__":
