@@ -11,16 +11,17 @@ export async function sendMessage(text: string, chatId = CHAT_ID) {
 }
 
 export async function sendPhoto(pngBuffer: Buffer, caption = "", chatId = CHAT_ID) {
+  // sendDocument preserva qualidade original (sendPhoto comprime a imagem)
   const form = new FormData();
   form.append("chat_id", chatId);
   form.append("caption", caption);
-  form.append("photo", new Blob([new Uint8Array(pngBuffer)], { type: "image/png" }), "dash.png");
+  form.append("document", new Blob([new Uint8Array(pngBuffer)], { type: "image/png" }), "dash.png");
 
-  const res = await fetch(`${API}/sendPhoto`, { method: "POST", body: form });
+  const res = await fetch(`${API}/sendDocument`, { method: "POST", body: form });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Telegram sendPhoto falhou: ${res.status} — ${body}`);
+    throw new Error(`Telegram sendDocument falhou: ${res.status} — ${body}`);
   }
 }
 

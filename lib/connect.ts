@@ -90,55 +90,40 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
       if (excelCb && !excelCb.checked) excelCb.click();
     });
 
-    // ─── Intercepta download via CDP ────────────────────
-    // Em vez de salvar em disco, capturamos o conteúdo em memória
+    // ─── Download via /tmp ────────────────────────────────
+    // setDownloadBehavior "deny" cancela o body — usamos "allow" + leitura de /tmp
+    const { mkdirSync, readdirSync, readFileSync, rmSync } = await import("fs");
+    const tmpDir = `/tmp/connect_dl_${Date.now()}`;
+    mkdirSync(tmpDir, { recursive: true });
+
     const cdpSession = await page.createCDPSession();
     await cdpSession.send("Page.setDownloadBehavior", {
-      behavior: "deny", // bloqueia download real — vamos interceptar
+      behavior: "allow",
+      downloadPath: tmpDir,
     });
 
-    // Intercepta a response do XLSX via request interception
-    let xlsxBuffer: Buffer | null = null;
     const downloadPromise = new Promise<Buffer>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Timeout aguardando XLSX")), DOWNLOAD_TIMEOUT);
+      const timer = setTimeout(
+        () => reject(new Error("Timeout aguardando XLSX")),
+        DOWNLOAD_TIMEOUT
+      );
 
-      page.on("response", async (response) => {
-        // Ignora preflights e respostas sem corpo
-        if (response.request().method() === "OPTIONS") return;
-        if (!response.ok()) return;
-
-        const ct = response.headers()["content-type"] ?? "";
-        const cd = response.headers()["content-disposition"] ?? "";
-
-        const isXlsx =
-          ct.includes("spreadsheet") ||
-          ct.includes("excel") ||
-          (ct.includes("octet-stream") && (cd.includes(".xlsx") || cd.includes("filename"))) ||
-          cd.includes(".xlsx");
-
-        if (!isXlsx) return;
-
+      const poll = setInterval(() => {
         try {
-          const buf = await response.buffer();
-          if (!buf || buf.length < 100) return; // ignora respostas vazias
-          clearTimeout(timer);
-          resolve(buf);
-        } catch (e) {
-          const msg = (e as Error).message ?? "";
-          // Ignora erros de preflight/sem corpo — são esperados
-          if (msg.includes("preflight") || msg.includes("response body")) return;
-          clearTimeout(timer);
-          reject(e);
+          const files = readdirSync(tmpDir).filter(
+            (f) => f.endsWith(".xlsx") || f.endsWith(".xls")
+          );
+          if (files.length > 0) {
+            clearInterval(poll);
+            clearTimeout(timer);
+            const buf = Buffer.from(readFileSync(`${tmpDir}/${files[0]}`));
+            rmSync(tmpDir, { recursive: true, force: true });
+            resolve(buf);
+          }
+        } catch {
+          // tmpDir ainda não existe ou ainda vazio — aguarda próximo tick
         }
-      });
-
-      // Rejeita se a página navegar para erro
-      page.on("requestfailed", (req) => {
-        if (req.url().includes("relatorio") || req.url().includes("export")) {
-          clearTimeout(timer);
-          reject(new Error(`Request falhou: ${req.url()}`));
-        }
-      });
+      }, 500);
     });
 
     // Clica em BUSCAR
@@ -152,7 +137,7 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
     if (!clicked) throw new Error("Botão BUSCAR não encontrado.");
 
     console.log("[connect] Aguardando download do XLSX...");
-    xlsxBuffer = await downloadPromise;
+    const xlsxBuffer = await downloadPromise;
     console.log(`[connect] XLSX recebido (${(xlsxBuffer.length / 1024).toFixed(1)} KB).`);
 
     return xlsxBuffer;

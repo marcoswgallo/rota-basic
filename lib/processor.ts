@@ -43,41 +43,37 @@ function parseValor(v: unknown): number {
 
 function calcMetrics(base: string, rows: Record<string, unknown>[]): BaseMetrics {
   const tecnicos = new Set(rows.map((r) => String(r["LOGIN"] ?? "").trim())).size;
-  const contratos = rows.length;
 
+  // Agrupa por contrato para garantir distinct em contratos, ND&ME e valor
+  const contratoMap = new Map<string, { isNdme: boolean; valor: number }>();
+  for (const r of rows) {
+    const contrato = String(r["CONTRATO"] ?? "").trim();
+    if (!contrato) continue;
+    const tipoOs = String(r["JOB COD"] ?? "").trim().toUpperCase();
+    const isNdme = NDME_TIPOS.has(TIPO_MAP[tipoOs] ?? "");
+    if (!contratoMap.has(contrato)) {
+      contratoMap.set(contrato, { isNdme, valor: parseValor(r["VALOR EMPRESA"]) });
+    } else if (isNdme) {
+      contratoMap.get(contrato)!.isNdme = true;
+    }
+  }
+
+  const contratos = contratoMap.size;
   let ndmeCount = 0;
   let valor = 0;
-
-  for (const r of rows) {
-    const tipoOs = String(r["TIPO OS"] ?? "").trim().toUpperCase();
-    const tipo = TIPO_MAP[tipoOs] ?? "";
-    if (NDME_TIPOS.has(tipo)) ndmeCount++;
-    valor += parseValor(r["VALOR EMPRESA"]);
+  for (const entry of contratoMap.values()) {
+    if (entry.isNdme) ndmeCount++;
+    valor += entry.valor;
   }
 
   const ndmePct = contratos > 0 ? (ndmeCount / contratos) * 100 : 0;
-  const media = contratos > 0 ? valor / contratos : 0;
-  const medTec = tecnicos > 0 ? valor / tecnicos : 0;
+  const media = tecnicos > 0 ? contratos / tecnicos : 0;   // contratos por técnico
+  const medTec = tecnicos > 0 ? valor / tecnicos : 0;      // valor por técnico
   const possibilidade = valor * 0.75;
 
   return { base, tecnicos, contratos, ndmePct, valor, media, medTec, possibilidade };
 }
 
-function totalize(label: string, list: BaseMetrics[]): BaseMetrics {
-  const tecnicos = list.reduce((s, b) => s + b.tecnicos, 0);
-  const contratos = list.reduce((s, b) => s + b.contratos, 0);
-  const valor = list.reduce((s, b) => s + b.valor, 0);
-
-  // %ND&ME do total: proporcional ao número de contratos
-  const ndmeWeighted = list.reduce((s, b) => s + (b.ndmePct / 100) * b.contratos, 0);
-  const ndmePct = contratos > 0 ? (ndmeWeighted / contratos) * 100 : 0;
-
-  const media = contratos > 0 ? valor / contratos : 0;
-  const medTec = tecnicos > 0 ? valor / tecnicos : 0;
-  const possibilidade = valor * 0.75;
-
-  return { base: label, tecnicos, contratos, ndmePct, valor, media, medTec, possibilidade };
-}
 
 export function processXlsx(buffer: Buffer): DashData {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
@@ -104,14 +100,24 @@ export function processXlsx(buffer: Buffer): DashData {
   const vt: BaseMetrics[] = [];
   const desconexao: BaseMetrics[] = [];
 
+  // Rows brutas por grupo — para calcular totais com distinct correto
+  const rowsBases: Record<string, unknown>[] = [];
+  const rowsVt: Record<string, unknown>[] = [];
+  const rowsDesconexao: Record<string, unknown>[] = [];
+
   for (const [base, rowsForBase] of byBase) {
     const metrics = calcMetrics(base, rowsForBase);
     if (base.includes("DESCONEX")) {
       desconexao.push(metrics);
+      rowsDesconexao.push(...rowsForBase);
     } else if (/ VT$/.test(base) || base.endsWith(" VT")) {
       vt.push(metrics);
+      rowsVt.push(...rowsForBase);
+    } else if (base.includes("MDU") || base.includes("VAR")) {
+      // Bases MDU e VAR não aparecem no dashboard
     } else {
       bases.push(metrics);
+      rowsBases.push(...rowsForBase);
     }
   }
 
@@ -124,8 +130,9 @@ export function processXlsx(buffer: Buffer): DashData {
     vt,
     desconexao,
     dataRef,
-    totalBases: totalize("Total", bases),
-    totalVt: totalize("Total", vt),
-    totalDesconexao: totalize("Total", desconexao),
+    // Totais calculados com distinct sobre as rows brutas do grupo
+    totalBases: calcMetrics("Total", rowsBases),
+    totalVt: calcMetrics("Total", rowsVt),
+    totalDesconexao: calcMetrics("Total", rowsDesconexao),
   };
 }

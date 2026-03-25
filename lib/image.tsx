@@ -35,31 +35,31 @@ interface ColDef {
 }
 
 const COLS_MAIN: ColDef[] = [
-  { label: "BASE",                     width: 220, value: r => r.base,                 align: "left"   },
-  { label: "TÉCNICO",                  width: 72,  value: r => fmtInt(r.tecnicos),     align: "center" },
-  { label: "CONTRATOS",                width: 90,  value: r => fmtInt(r.contratos),    align: "center" },
-  { label: "%ND&ME",                   width: 82,  value: r => fmtPct(r.ndmePct),      align: "right"  },
-  { label: "VALOR",                    width: 120, value: r => fmtBRL(r.valor),        align: "right"  },
-  { label: "MÉDIA",                    width: 100, value: r => fmtBRL(r.media),        align: "right"  },
-  { label: "MÉD. TÉC.",               width: 110, value: r => fmtBRL(r.medTec),       align: "right"  },
-  { label: "POSSIB. FATURAMENTO",      width: 160, value: r => fmtBRL(r.possibilidade),align: "right"  },
+  { label: "BASE",               width: 175, value: r => r.base,                  align: "left"   },
+  { label: "TÉC.",               width: 48,  value: r => fmtInt(r.tecnicos),      align: "center" },
+  { label: "CONTR.",             width: 68,  value: r => fmtInt(r.contratos),     align: "center" },
+  { label: "%ND&ME",             width: 68,  value: r => fmtPct(r.ndmePct),       align: "right"  },
+  { label: "VALOR",              width: 105, value: r => fmtBRL(r.valor),         align: "right"  },
+  { label: "MÉDIA",              width: 72,  value: r => fmt.format(r.media),     align: "right"  },
+  { label: "MÉD.TÉC.",          width: 105, value: r => fmtBRL(r.medTec),        align: "right"  },
+  { label: "POSSIB.FATUR.",      width: 118, value: r => fmtBRL(r.possibilidade), align: "right"  },
 ];
 
 const COLS_VT: ColDef[] = [
-  { label: "BASE",      width: 180, value: r => r.base,             align: "left"   },
-  { label: "TÉCNICO",   width: 72,  value: r => fmtInt(r.tecnicos), align: "center" },
-  { label: "CONTRATOS", width: 90,  value: r => fmtInt(r.contratos),align: "center" },
-  { label: "MÉDIA",     width: 100, value: r => fmtBRL(r.media),    align: "right"  },
+  { label: "BASE",    width: 155, value: r => r.base,             align: "left"   },
+  { label: "TÉC.",   width: 48,  value: r => fmtInt(r.tecnicos), align: "center" },
+  { label: "CONTR.", width: 68,  value: r => fmtInt(r.contratos),align: "center" },
+  { label: "MÉDIA",  width: 72,  value: r => fmt.format(r.media), align: "right"  },
 ];
 
 const COLS_DESC: ColDef[] = [
-  { label: "BASE",                     width: 220, value: r => r.base,                 align: "left"   },
-  { label: "TÉCNICO",                  width: 72,  value: r => fmtInt(r.tecnicos),     align: "center" },
-  { label: "CONTRATOS",                width: 90,  value: r => fmtInt(r.contratos),    align: "center" },
-  { label: "VALOR",                    width: 120, value: r => fmtBRL(r.valor),        align: "right"  },
-  { label: "MÉDIA",                    width: 100, value: r => fmtBRL(r.media),        align: "right"  },
-  { label: "MÉD. TÉC.",               width: 110, value: r => fmtBRL(r.medTec),       align: "right"  },
-  { label: "POSSIB. FATURAMENTO",      width: 160, value: r => fmtBRL(r.possibilidade),align: "right"  },
+  { label: "BASE",          width: 175, value: r => r.base,                  align: "left"   },
+  { label: "TÉC.",          width: 48,  value: r => fmtInt(r.tecnicos),      align: "center" },
+  { label: "CONTR.",        width: 68,  value: r => fmtInt(r.contratos),     align: "center" },
+  { label: "VALOR",         width: 105, value: r => fmtBRL(r.valor),         align: "right"  },
+  { label: "MÉDIA",         width: 72,  value: r => fmt.format(r.media),     align: "right"  },
+  { label: "MÉD.TÉC.",     width: 105, value: r => fmtBRL(r.medTec),        align: "right"  },
+  { label: "POSSIB.FATUR.", width: 118, value: r => fmtBRL(r.possibilidade), align: "right"  },
 ];
 
 // ─── Componentes JSX para Satori ─────────────────────────────────────────────
@@ -77,8 +77,6 @@ function Table({
 }) {
   const rowH = 22;
   const headerH = 26;
-  const tableW = cols.reduce((s, c) => s + c.width, 0);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", border: `1px solid ${C.border}` }}>
       {/* Header */}
@@ -91,7 +89,7 @@ function Table({
               display: "flex",
               alignItems: "center",
               justifyContent: col.align === "right" ? "flex-end" : col.align === "center" ? "center" : "flex-start",
-              padding: "0 6px",
+              padding: "0 4px",
               fontSize: fontSize - 1,
               fontWeight: 700,
               color: C.headerText,
@@ -121,7 +119,7 @@ function Table({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: col.align === "right" ? "flex-end" : col.align === "center" ? "center" : "flex-start",
-                padding: "0 6px",
+                padding: "0 4px",
                 fontSize,
                 color: "#111",
                 borderRight: `1px solid ${C.border}`,
@@ -144,7 +142,7 @@ function Table({
               display: "flex",
               alignItems: "center",
               justifyContent: col.align === "right" ? "flex-end" : col.align === "center" ? "center" : "flex-start",
-              padding: "0 6px",
+              padding: "0 4px",
               fontSize,
               fontWeight: 700,
               color: C.totalText,
@@ -162,8 +160,7 @@ function Table({
 function Dashboard({ data }: { data: DashData }) {
   const mainW = COLS_MAIN.reduce((s, c) => s + c.width, 0);
   const vtW = COLS_VT.reduce((s, c) => s + c.width, 0);
-  const descW = COLS_DESC.reduce((s, c) => s + c.width, 0);
-  const totalW = mainW + 20 + vtW;
+const totalW = mainW + 20 + vtW;
 
   return (
     <div
@@ -172,7 +169,7 @@ function Dashboard({ data }: { data: DashData }) {
         flexDirection: "column",
         background: C.bg,
         padding: 20,
-        fontFamily: "Arial, sans-serif",
+        fontFamily: "Inter, sans-serif",
         width: totalW + 40,
       }}
     >
@@ -194,7 +191,7 @@ function Dashboard({ data }: { data: DashData }) {
             Rota Inicial
           </div>
           <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>
-            Referência: {data.dataRef}
+            {`Referência: ${data.dataRef}`}
           </div>
         </div>
       </div>
@@ -214,26 +211,34 @@ function Dashboard({ data }: { data: DashData }) {
 // ─── Função principal ─────────────────────────────────────────────────────────
 
 export async function generateDashImage(data: DashData): Promise<Buffer> {
-  // Satori não carrega fontes do sistema — usamos uma fonte base64 ou web font
-  const fontRes = await fetch(
-    "https://fonts.gstatic.com/s/arimo/v29/P5sfzZCDf9_T_3cV7NCUECyoxNk37cxsBxDAVQI4aA.woff"
-  );
-  const fontData = await fontRes.arrayBuffer();
+  // Carrega fonte local (public/fonts/) — mais confiável que fetch externo
+  const { readFileSync } = await import("fs");
+  const { join } = await import("path");
+  const fontData = readFileSync(join(process.cwd(), "public/fonts/inter-400.ttf"));
+
+  // Dimensões exatas baseadas nas colunas e nos dados
+  const mainW = COLS_MAIN.reduce((s, c) => s + c.width, 0);
+  const vtW   = COLS_VT.reduce((s, c) => s + c.width, 0);
+  const dashW = mainW + 20 + vtW + 40; // gap 20 + padding 20 cada lado
+
+  const ROW_H = 22, HEADER_H = 26, TOTAL_H = 24;
+  const tableH = (n: number) => HEADER_H + n * ROW_H + TOTAL_H;
+  const mainTableH = tableH(data.bases.length);
+  const vtTableH   = tableH(data.vt.length);
+  const descTableH = tableH(data.desconexao.length);
+  const dashH = 20 + 96 + Math.max(mainTableH, vtTableH) + 14 + descTableH + 20;
 
   const svg = await satori(<Dashboard data={data} />, {
-    width: 1400,
-    height: 900,
-    fonts: [
-      {
-        name: "Arial",
-        data: fontData,
-        weight: 400,
-        style: "normal",
-      },
-    ],
+    width: dashW,
+    height: dashH,
+    fonts: [{ name: "Inter", data: fontData, weight: 400, style: "normal" }],
   });
 
-  // Converte SVG → PNG com sharp
-  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  // Rasteriza o SVG a 2× (vetor → sem perda) para imagem nítida no Telegram
+  const png = await sharp(Buffer.from(svg))
+    .resize(dashW * 2, dashH * 2, { kernel: "lanczos3" })
+    .png({ compressionLevel: 6 })
+    .toBuffer();
+
   return png;
 }
