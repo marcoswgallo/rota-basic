@@ -35,7 +35,11 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
     await page.type('[name="password"]', password);
     await page.click('button[type="submit"]');
 
-    await page.waitForNavigation({ waitUntil: "domcontentloaded" });
+    // Aguarda a URL mudar para /home (funciona tanto com navegação full-page quanto SPA/redirect JS)
+    await page.waitForFunction(
+      () => window.location.href.includes("/home"),
+      { timeout: PAGE_LOAD_TIMEOUT }
+    );
     if (!page.url().includes("/home")) {
       throw new Error("Login falhou — verifique CONNECT_EMAIL e CONNECT_PASSWORD.");
     }
