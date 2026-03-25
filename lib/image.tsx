@@ -43,28 +43,28 @@ const COLS_MAIN: ColDef[] = [
   { label: "BASE",           width: 175, value: r => r.base,                                          align: "left"   },
   { label: "TÉC.",           width: 48,  value: r => fmtInt(r.tecnicos),                              align: "center" },
   { label: "CONTR.",         width: 68,  value: r => fmtInt(r.contratos),                             align: "center" },
-  { label: "%ND&ME",         width: 72,  value: r => <NdmeCell v={r.ndmePct} />,                      align: "right"  },
-  { label: "VALOR",          width: 105, value: r => fmtBRL(r.valor),                                 align: "right"  },
-  { label: "MÉDIA",          width: 72,  value: r => fmt.format(r.media),                             align: "right"  },
-  { label: "MÉD.TÉC.",       width: 105, value: r => fmtBRL(r.medTec),                                align: "right"  },
-  { label: "POSSIB.FATUR.",  width: 118, value: r => fmtBRL(r.possibilidade),                         align: "right"  },
+  { label: "%ND&ME",         width: 72,  value: r => <NdmeCell v={r.ndmePct} />,                      align: "center" },
+  { label: "VALOR",          width: 105, value: r => fmtBRL(r.valor),                                 align: "center" },
+  { label: "MÉDIA",          width: 72,  value: r => fmt.format(r.media),                             align: "center" },
+  { label: "MÉD.TÉC.",       width: 105, value: r => fmtBRL(r.medTec),                                align: "center" },
+  { label: "POSSIB.FATUR.",  width: 118, value: r => fmtBRL(r.possibilidade),                         align: "center" },
 ];
 
 const COLS_VT: ColDef[] = [
   { label: "BASE",   width: 155, value: r => r.base,             align: "left"   },
   { label: "TÉC.",   width: 48,  value: r => fmtInt(r.tecnicos), align: "center" },
   { label: "CONTR.", width: 68,  value: r => fmtInt(r.contratos),align: "center" },
-  { label: "MÉDIA",  width: 72,  value: r => fmt.format(r.media),align: "right"  },
+  { label: "MÉDIA",  width: 72,  value: r => fmt.format(r.media),align: "center" },
 ];
 
 const COLS_DESC: ColDef[] = [
   { label: "BASE",          width: 175, value: r => r.base,               align: "left"   },
   { label: "TÉC.",          width: 48,  value: r => fmtInt(r.tecnicos),   align: "center" },
   { label: "CONTR.",        width: 68,  value: r => fmtInt(r.contratos),  align: "center" },
-  { label: "VALOR",         width: 105, value: r => fmtBRL(r.valor),      align: "right"  },
-  { label: "MÉDIA",         width: 72,  value: r => fmt.format(r.media),  align: "right"  },
-  { label: "MÉD.TÉC.",      width: 105, value: r => fmtBRL(r.medTec),     align: "right"  },
-  { label: "POSSIB.FATUR.", width: 118, value: r => fmtBRL(r.possibilidade), align: "right" },
+  { label: "VALOR",         width: 105, value: r => fmtBRL(r.valor),      align: "center" },
+  { label: "MÉDIA",         width: 72,  value: r => fmt.format(r.media),  align: "center" },
+  { label: "MÉD.TÉC.",      width: 105, value: r => fmtBRL(r.medTec),     align: "center" },
+  { label: "POSSIB.FATUR.", width: 118, value: r => fmtBRL(r.possibilidade), align: "center" },
 ];
 
 // ─── Célula colorida de ND&ME ─────────────────────────────────────────────────
