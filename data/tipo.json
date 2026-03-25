@@ -1,0 +1,454 @@
+[
+  {
+    "OS": "ADESAO ENTREGA ADC STREAMING",
+    "TIPO": "ENTREGA STREAMING"
+  },
+  {
+    "OS": "ADESAO ENTREGA STREAMING",
+    "TIPO": "ENTREGA STREAMING"
+  },
+  {
+    "OS": "ADESAO INSTALACAO DE ASSINATURA",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ADESAO INSTALACAO DE ASSINATURA DIGITAL",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ADESAO INSTALAR PONTO PORTABILIDADE",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ADESAO INSTALAR PONTO VIRTUA",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ADESAO INSTALAR PONTO VOIP",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ADESAO INSTALAR SERVICO CONEXAO ADICIONAL DIGITAL",
+    "TIPO": "ADESÃO PTO ADC"
+  },
+  {
+    "OS": "BASE ENTREGA ADC STREAMING",
+    "TIPO": "ENTREGA STREAMING"
+  },
+  {
+    "OS": "BASE ENTREGA STREAMING",
+    "TIPO": "ENTREGA STREAMING"
+  },
+  {
+    "OS": "BLINDAGEM TV ATUALIZACAO DIG",
+    "TIPO": "TROCA"
+  },
+  {
+    "OS": "CONFIGURACAO STREAMING",
+    "TIPO": "ENTREGA STREAMING"
+  },
+  {
+    "OS": "CONSTRUCAO MDU GPON",
+    "TIPO": "MDU SIMPLIFICADO"
+  },
+  {
+    "OS": "DESCONEXAO I C/ RETIRADA DE EQUIPAMENTO",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "DESCONEXAO I C/ RETIRADA DE EQUIPAMENTO EBT",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "Desconexao Opcao",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "DESCONEXAO OPCAO C/ RETIRADA DE EQUIPAMENTO",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "DESCONEXAO POR OPCAO EBT",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "ENVIO DE CHIP VIA TECNICO",
+    "TIPO": "CHIP"
+  },
+  {
+    "OS": "INST PONTO EXTENSAO REDE VIRTUA",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALACAO DE CABO GPON",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALACAO DE CABO HFC",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALACAO WIFI MESH",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALAR CABEAMENTO MESH",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALAR PONTO PORTABILIDADE",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALAR PONTO VIRTUA",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALAR PONTO VOIP",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALAR SERVICO CONEXAO ADICIONAL DIGITAL",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "INSTALAR TV BASE",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MANUTENCAO CORRETIVA DEGRADACAO MDU",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MANUTENCAO CORRETIVA MDU",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MANUTENCAO CORRETIVA MDU GPON",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MANUTENCAO PREVENTIVA MDU",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MODERNIZACAO BL",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "MODERNIZACAO EXTENSOR WIFI MESH",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "MUD PACOTE ENTREGA STREAMING",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO ENTREGA ADC STREAMING",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO ENTREGA STREAMING",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO INSTALAR ASSINATURA",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO INSTALAR ASSINATURA DIGITAL",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO INSTALAR PONTO ADICIONAL VIRTUA",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO INSTALAR PONTO VOIP",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE LOCAL DE PONTO",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MUDANCA DE LOCAL DE PONTO DIGITAL",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MUDANCA DE LOCAL DE PONTO VOIP",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MUDANCA DE PACOTE",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "MUDANCA DE PACOTE DIGITAL",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "MUDANCA ENDERECO INSTALAR SERVICO CONEXAO ADIC DIG",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "NOVO CABO DE ENTRADA",
+    "TIPO": "PROJETO F"
+  },
+  {
+    "OS": "REFAZER MANUTENCAO",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "REINSTALACAO ASSINATURA",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "REINSTALACAO ASSINATURA DIGITAL",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "REINSTALACAO ASSINATURA VOIP",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "REINSTALACAO ENTREGA STREAMING",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "REINSTALACAO PONTO ADICIONAL VIRTUA",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "REINSTALACAO SERVICO CONEXAO ADICIONAL DIGITAL",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "RETIRADA WIFI MESH",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "RETIRAR EMTA",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "RETIRAR EQUIPAMENTO",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "RETIRAR PONTO",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "RETORNO DE CREDENCIADA",
+    "TIPO": "RETORNO"
+  },
+  {
+    "OS": "SUBS CONTROLE REMOTO STREAMING",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "SUBSTITUICAO DE CONTROLE REMOTO DIGITAL",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "TROCA DE EQUIPAMENTO HD",
+    "TIPO": "TROCA"
+  },
+  {
+    "OS": "TROCA DE EQUIPAMENTO STREAMING",
+    "TIPO": "TROCA"
+  },
+  {
+    "OS": "TROCA DECODER PARA ATUALIZACAO DIGITAL",
+    "TIPO": "TROCA"
+  },
+  {
+    "OS": "TROCA DECODER PARA ATUALIZACAO DIGITAL 4K",
+    "TIPO": "TROCA"
+  },
+  {
+    "OS": "VARREDURA DE REDE EXTERNA",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA DIGITAL",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA STREAMING",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA VIRTUA",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA VOIP",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA WIFI MESH",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISTORIA DE CASOS ESPECIAIS EPO",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MANUTENCAO PREVENTIVA INDOOR I",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "REFAZER INSTALACAO",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MANUTENCAO PREVENTIVA INDOOR I",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "REFAZER MANUTENCAO PON",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MUDANCA DE PACOTE DOWN HDD",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "MUDANCA ENDERECO INSTALAR SERVICO CONEXAO ADIC",
+    "TIPO": "MUD ENDEREÇO"
+  },
+  {
+    "OS": "MUDANCA DE ENDERECO RETIRAR PONTOS",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "MANUTENCAO REPARO NO DROP",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "RETIRAR PONTO VOIP",
+    "TIPO": "DESCONEXÃO"
+  },
+  {
+    "OS": "MANUTENCAO PREVENTIVA INDOOR I",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "INSTALACAO EXTENSAO VOIP",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "MUDANCA DE PACOTE RET HDD",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "SUBS DE CONTROLE REMOTO VOZ",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "TROCA DE EQUIPAMENTO WIFI",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MANUTENCAO RETORNO COP",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "REINSTALACAO ENTREGA ADC STREAMING",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "SUBSTITUICAO DE CONTROLE REMOTO ANALOGICA",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA SMART HOME",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "ENTREGA DE CONTROLE REMOTO VOZ",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "MODERNIZACAO EQUIPAMENTO DIGITAL",
+    "TIPO": "MUDANÇA DE PACOTE"
+  },
+  {
+    "OS": "TROCA EQUIPAMENTO PARA ATUALIZACAO TECNOLOGIA",
+    "TIPO": "TROCA"
+  },
+  {
+    "OS": "LIMPEZA DE RUIDO INDOOR",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "REINSTALACAO SERVICO CONEXAO ADICIONAL",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "VISITA TECNICA CUMPRIMENTO ESPECIAL",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "ENTREGA EXPRESS KIT MONITORAMENTO",
+    "TIPO": "CHIP"
+  },
+  {
+    "OS": "ENTREGA EXPRESS KIT MONITORAMENTO",
+    "TIPO": "CHIP"
+  },
+  {
+    "OS": "ENTREGA EXPRESS KIT MONITORAMENTO",
+    "TIPO": "CHIP"
+  },
+  {
+    "OS": "ENTREGA EXPRESS KIT MONITORAMENTO",
+    "TIPO": "CHIP"
+  },
+  {
+    "OS": "VISITA TECNICA WIFI 360",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISTORIA DE CASOS ESPECIAIS IAT",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "REINSTALACAO PONTO ADICIONAL VOIP",
+    "TIPO": "SERVIÇOS"
+  },
+  {
+    "OS": "DESOBSTRUCAO INSTALACAO DE ASSINATURA",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ENTREGA DE CABOS ESPECIAIS E CONEXOES",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA HDD",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "BLINDAGEM TV ATUALIZACAO 4K",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "SUBS DE CONTROLE REMOTO VOZ TV",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "VISITA TECNICA NOW",
+    "TIPO": "VISITA"
+  },
+  {
+    "OS": "ATIVACAO SERVICO EBT",
+    "TIPO": "ADESÃO"
+  },
+  {
+    "OS": "ATENDIMENTO PRIORITARIO MANUTENCAO",
+    "TIPO": "VISITA"
+  }
+]
