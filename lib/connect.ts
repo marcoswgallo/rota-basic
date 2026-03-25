@@ -28,14 +28,14 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
 
     // ─── Login ───────────────────────────────────────────
     console.log("[connect] Abrindo login...");
-    await page.goto(LOGIN_URL, { waitUntil: "networkidle2" });
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
 
     await page.waitForSelector('[name="email"]');
     await page.type('[name="email"]', email);
     await page.type('[name="password"]', password);
     await page.click('button[type="submit"]');
 
-    await page.waitForNavigation({ waitUntil: "networkidle2" });
+    await page.waitForNavigation({ waitUntil: "domcontentloaded" });
     if (!page.url().includes("/home")) {
       throw new Error("Login falhou — verifique CONNECT_EMAIL e CONNECT_PASSWORD.");
     }
@@ -43,7 +43,7 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
 
     // ─── Página do relatório ─────────────────────────────
     console.log("[connect] Abrindo página do relatório...");
-    await page.goto(REL_URL, { waitUntil: "networkidle2" });
+    await page.goto(REL_URL, { waitUntil: "domcontentloaded" });
 
     // Seleciona "Relatorio Analitico"
     await page.waitForSelector('[name="tipoRelat"]');
