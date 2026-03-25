@@ -1,3 +1,4 @@
+import React from "react";
 import satori from "satori";
 import sharp from "sharp";
 import type { DashData, BaseMetrics } from "./processor";

@@ -133,15 +133,13 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
 
     // Clica em BUSCAR
     console.log("[connect] Clicando em BUSCAR...");
-    await page.waitForSelector("button:not([disabled])");
-    const buscarBtn = await page.evaluateHandle(() => {
-      const btns = Array.from(document.querySelectorAll("button"));
-      return btns.find(b => b.textContent?.toUpperCase().includes("BUSCAR")) ?? null;
+    const clicked = await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
+      const btn = btns.find(b => b.textContent?.toUpperCase().includes("BUSCAR"));
+      if (btn) { btn.click(); return true; }
+      return false;
     });
-    if (!buscarBtn || !(await buscarBtn.asElement())) {
-      throw new Error("Botão BUSCAR não encontrado.");
-    }
-    await (await buscarBtn.asElement())!.click();
+    if (!clicked) throw new Error("Botão BUSCAR não encontrado.");
 
     console.log("[connect] Aguardando download do XLSX...");
     xlsxBuffer = await downloadPromise;
