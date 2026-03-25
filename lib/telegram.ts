@@ -14,7 +14,7 @@ export async function sendPhoto(pngBuffer: Buffer, caption = "", chatId = CHAT_I
   const form = new FormData();
   form.append("chat_id", chatId);
   form.append("caption", caption);
-  form.append("photo", new Blob([pngBuffer], { type: "image/png" }), "dash.png");
+  form.append("photo", new Blob([new Uint8Array(pngBuffer)], { type: "image/png" }), "dash.png");
 
   const res = await fetch(`${API}/sendPhoto`, { method: "POST", body: form });
 
