@@ -99,26 +99,32 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
       const timer = setTimeout(() => reject(new Error("Timeout aguardando XLSX")), DOWNLOAD_TIMEOUT);
 
       page.on("response", async (response) => {
-        const url = response.url();
+        // Ignora preflights e respostas sem corpo
+        if (response.request().method() === "OPTIONS") return;
+        if (!response.ok()) return;
+
         const ct = response.headers()["content-type"] ?? "";
         const cd = response.headers()["content-disposition"] ?? "";
 
         const isXlsx =
           ct.includes("spreadsheet") ||
           ct.includes("excel") ||
-          ct.includes("octet-stream") ||
-          cd.includes(".xlsx") ||
-          cd.includes("filename");
+          (ct.includes("octet-stream") && (cd.includes(".xlsx") || cd.includes("filename"))) ||
+          cd.includes(".xlsx");
 
-        if (isXlsx) {
-          try {
-            const buf = await response.buffer();
-            clearTimeout(timer);
-            resolve(buf);
-          } catch (e) {
-            clearTimeout(timer);
-            reject(e);
-          }
+        if (!isXlsx) return;
+
+        try {
+          const buf = await response.buffer();
+          if (!buf || buf.length < 100) return; // ignora respostas vazias
+          clearTimeout(timer);
+          resolve(buf);
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          // Ignora erros de preflight/sem corpo — são esperados
+          if (msg.includes("preflight") || msg.includes("response body")) return;
+          clearTimeout(timer);
+          reject(e);
         }
       });
 
