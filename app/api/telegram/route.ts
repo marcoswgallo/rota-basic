@@ -3,7 +3,7 @@ import { sendMessage } from "@/lib/telegram";
 import { runPipeline } from "@/lib/pipeline";
 
 // Permite até 800s para o Fluid Compute completar o pipeline
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID!;
 
