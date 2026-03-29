@@ -14,7 +14,8 @@ import { downloadRelatorio } from "@/lib/connect";
 
 export const maxDuration = 300;
 
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID!;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+if (!CHAT_ID) throw new Error("TELEGRAM_CHAT_ID env var is not set");
 
 const HELP = `🤖 Bot Rota Basic
 
