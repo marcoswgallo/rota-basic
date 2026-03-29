@@ -29,7 +29,52 @@ export async function setWebhook(url: string) {
   const res = await fetch(`${API}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, allowed_updates: ["message"] }),
+    body: JSON.stringify({ url, allowed_updates: ["message", "callback_query"] }),
   });
   return res.json();
+}
+
+export async function sendMessageWithKeyboard(
+  text: string,
+  inlineKeyboard: object,
+  chatId = CHAT_ID
+) {
+  await fetch(`${API}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      reply_markup: inlineKeyboard,
+    }),
+  });
+}
+
+export async function answerCallbackQuery(callbackQueryId: string) {
+  await fetch(`${API}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId }),
+  });
+}
+
+export async function sendDocumentFile(
+  buffer: Buffer,
+  filename: string,
+  caption = "",
+  chatId = CHAT_ID
+) {
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("caption", caption);
+  form.append(
+    "document",
+    new Blob([new Uint8Array(buffer)], { type: "application/octet-stream" }),
+    filename
+  );
+  const res = await fetch(`${API}/sendDocument`, { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Telegram sendDocument falhou: ${res.status} — ${body}`);
+  }
 }
