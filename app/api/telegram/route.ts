@@ -14,8 +14,7 @@ import { downloadRelatorio } from "@/lib/connect";
 
 export const maxDuration = 300;
 
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-if (!CHAT_ID) throw new Error("TELEGRAM_CHAT_ID env var is not set");
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? "";
 
 const HELP = `🤖 Bot Rota Basic
 
@@ -71,6 +70,11 @@ function xlsxFilename(base: string, dataIni: string, dataFim: string): string {
 }
 
 export async function POST(req: Request) {
+  if (!CHAT_ID) {
+    console.error("TELEGRAM_CHAT_ID env var is not set");
+    return new Response("configuration error", { status: 500 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
