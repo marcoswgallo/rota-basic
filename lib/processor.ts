@@ -10,6 +10,10 @@ for (const row of tipoRaw as { OS: string; TIPO: string }[]) {
 // TIPOs que contam como ND&ME
 const NDME_TIPOS = new Set(["ADESÃO", "MUD ENDEREÇO"]);
 
+// Filtros do dash parcial — STATUS executado E COD STATUS produtivo
+const STATUS_EXECUTADO = new Set(["EXECUTADO", "RETORNO CREDENCIA"]);
+const COD_STATUS_PRODUTIVO = "PRODUTIVO";
+
 export interface BaseMetrics {
   base: string;
   tecnicos: number;
@@ -44,26 +48,30 @@ function parseValor(v: unknown): number {
 function calcMetrics(base: string, rows: Record<string, unknown>[]): BaseMetrics {
   const tecnicos = new Set(rows.map((r) => String(r["LOGIN"] ?? "").trim())).size;
 
-  // Agrupa por contrato para garantir distinct em contratos, ND&ME e valor
-  const contratoMap = new Map<string, { isNdme: boolean; valor: number }>();
+  // Contrato distinto para contagem e ND&ME
+  const contratoMap = new Map<string, { isNdme: boolean }>();
+  let valor = 0;
+
   for (const r of rows) {
     const contrato = String(r["CONTRATO"] ?? "").trim();
     if (!contrato) continue;
     const tipoOs = String(r["JOB COD"] ?? "").trim().toUpperCase();
     const isNdme = NDME_TIPOS.has(TIPO_MAP[tipoOs] ?? "");
+
     if (!contratoMap.has(contrato)) {
-      contratoMap.set(contrato, { isNdme, valor: parseValor(r["VALOR EMPRESA"]) });
+      contratoMap.set(contrato, { isNdme });
     } else if (isNdme) {
       contratoMap.get(contrato)!.isNdme = true;
     }
+
+    // Soma todas as linhas (igual ao AutoSum do Excel)
+    valor += parseValor(r["VALOR EMPRESA"]);
   }
 
   const contratos = contratoMap.size;
   let ndmeCount = 0;
-  let valor = 0;
   for (const entry of contratoMap.values()) {
     if (entry.isNdme) ndmeCount++;
-    valor += entry.valor;
   }
 
   const ndmePct = contratos > 0 ? (ndmeCount / contratos) * 100 : 0;
@@ -75,17 +83,27 @@ function calcMetrics(base: string, rows: Record<string, unknown>[]): BaseMetrics
 }
 
 
-export function processXlsx(buffer: Buffer): DashData {
+export function processXlsx(buffer: Buffer, apenasExecutados = false): DashData {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const sheetName = workbook.SheetNames[0];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+  let rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
     workbook.Sheets[sheetName]
   );
 
   if (rows.length === 0) throw new Error("Relatório vazio — nenhuma linha encontrada.");
 
-  // Data de referência: campo DATA_TOA da primeira linha
-  const dataRef = String(rows[0]["DATA_TOA"] ?? rows[0]["DATA"] ?? "").split(" ")[0];
+  if (apenasExecutados) {
+    rows = rows.filter((r) => {
+      const status = String(r["STATUS"] ?? "").trim().toUpperCase();
+      const codStatus = String(r["COD STATUS"] ?? "").trim().toUpperCase();
+      return STATUS_EXECUTADO.has(status) && codStatus === COD_STATUS_PRODUTIVO;
+    });
+    if (rows.length === 0)
+      throw new Error("Nenhum contrato executado/produtivo encontrado no relatório.");
+  }
+
+  // Data de referência: campo DATA da primeira linha total (antes do filtro de status)
+  const dataRef = String(rows[0]["DATA"] ?? "").split(" ")[0];
 
   // Agrupa por BASE
   const byBase = new Map<string, Record<string, unknown>[]>();

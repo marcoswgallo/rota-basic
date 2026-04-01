@@ -150,3 +150,10 @@ export async function downloadRelatorio(dataIni: string, dataFim: string): Promi
 export function hoje(): string {
   return new Date().toISOString().split("T")[0];
 }
+
+/** Retorna data no formato YYYY-MM-DD para ontem */
+export function ontem(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split("T")[0];
+}

@@ -2,6 +2,7 @@ import React from "react";
 import satori from "satori";
 import sharp from "sharp";
 import type { DashData, BaseMetrics } from "./processor";
+import type { TipoDash } from "./pipeline";
 
 // ─── Helpers de formatação ────────────────────────────────────────────────────
 
@@ -39,33 +40,41 @@ interface ColDef {
   align?: "left" | "right" | "center";
 }
 
-const COLS_MAIN: ColDef[] = [
-  { label: "BASE",           width: 175, value: r => r.base,                                          align: "left"   },
-  { label: "TÉC.",           width: 48,  value: r => fmtInt(r.tecnicos),                              align: "center" },
-  { label: "CONTR.",         width: 68,  value: r => fmtInt(r.contratos),                             align: "center" },
-  { label: "%ND&ME",         width: 72,  value: r => <NdmeCell v={r.ndmePct} />,                      align: "center" },
-  { label: "VALOR",          width: 105, value: r => fmtBRL(r.valor),                                 align: "center" },
-  { label: "MÉDIA",          width: 72,  value: r => fmt.format(r.media),                             align: "center" },
-  { label: "MÉD.TÉC.",       width: 105, value: r => fmtBRL(r.medTec),                                align: "center" },
-  { label: "POSSIB.FATUR.",  width: 118, value: r => fmtBRL(r.possibilidade),                         align: "center" },
-];
+const COL_POSSIB: ColDef = { label: "POSSIB.FATUR.", width: 118, value: r => fmtBRL(r.possibilidade), align: "center" };
+
+function getColsMain(tipo: TipoDash): ColDef[] {
+  const cols: ColDef[] = [
+    { label: "BASE",     width: 175, value: r => r.base,                   align: "left"   },
+    { label: "TÉC.",     width: 48,  value: r => fmtInt(r.tecnicos),       align: "center" },
+    { label: "CONTR.",   width: 68,  value: r => fmtInt(r.contratos),      align: "center" },
+    { label: "%ND&ME",   width: 72,  value: r => <NdmeCell v={r.ndmePct} />, align: "center" },
+    { label: "VALOR",    width: 105, value: r => fmtBRL(r.valor),          align: "center" },
+    { label: "MÉDIA",    width: 72,  value: r => fmt.format(r.media),      align: "center" },
+    { label: "MÉD.TÉC.", width: 105, value: r => fmtBRL(r.medTec),        align: "center" },
+  ];
+  if (tipo === "completo") cols.push(COL_POSSIB);
+  return cols;
+}
 
 const COLS_VT: ColDef[] = [
-  { label: "BASE",   width: 155, value: r => r.base,             align: "left"   },
-  { label: "TÉC.",   width: 48,  value: r => fmtInt(r.tecnicos), align: "center" },
-  { label: "CONTR.", width: 68,  value: r => fmtInt(r.contratos),align: "center" },
-  { label: "MÉDIA",  width: 72,  value: r => fmt.format(r.media),align: "center" },
+  { label: "BASE",   width: 155, value: r => r.base,              align: "left"   },
+  { label: "TÉC.",   width: 48,  value: r => fmtInt(r.tecnicos),  align: "center" },
+  { label: "CONTR.", width: 68,  value: r => fmtInt(r.contratos), align: "center" },
+  { label: "MÉDIA",  width: 72,  value: r => fmt.format(r.media), align: "center" },
 ];
 
-const COLS_DESC: ColDef[] = [
-  { label: "BASE",          width: 175, value: r => r.base,               align: "left"   },
-  { label: "TÉC.",          width: 48,  value: r => fmtInt(r.tecnicos),   align: "center" },
-  { label: "CONTR.",        width: 68,  value: r => fmtInt(r.contratos),  align: "center" },
-  { label: "VALOR",         width: 105, value: r => fmtBRL(r.valor),      align: "center" },
-  { label: "MÉDIA",         width: 72,  value: r => fmt.format(r.media),  align: "center" },
-  { label: "MÉD.TÉC.",      width: 105, value: r => fmtBRL(r.medTec),     align: "center" },
-  { label: "POSSIB.FATUR.", width: 118, value: r => fmtBRL(r.possibilidade), align: "center" },
-];
+function getColsDesc(tipo: TipoDash): ColDef[] {
+  const cols: ColDef[] = [
+    { label: "BASE",     width: 175, value: r => r.base,              align: "left"   },
+    { label: "TÉC.",     width: 48,  value: r => fmtInt(r.tecnicos),  align: "center" },
+    { label: "CONTR.",   width: 68,  value: r => fmtInt(r.contratos), align: "center" },
+    { label: "VALOR",    width: 105, value: r => fmtBRL(r.valor),     align: "center" },
+    { label: "MÉDIA",    width: 72,  value: r => fmt.format(r.media), align: "center" },
+    { label: "MÉD.TÉC.", width: 105, value: r => fmtBRL(r.medTec),   align: "center" },
+  ];
+  if (tipo === "completo") cols.push(COL_POSSIB);
+  return cols;
+}
 
 // ─── Célula colorida de ND&ME ─────────────────────────────────────────────────
 
@@ -167,11 +176,14 @@ function SectionTitle({ label, width }: { label: string; width: number }) {
 
 // ─── Dashboard principal ──────────────────────────────────────────────────────
 
-function Dashboard({ data, logoSrc, bolinhaSrc }: {
+function Dashboard({ data, logoSrc, bolinhaSrc, tipo }: {
   data: DashData;
   logoSrc: string;
   bolinhaSrc: string;
+  tipo: TipoDash;
 }) {
+  const COLS_MAIN = getColsMain(tipo);
+  const COLS_DESC = getColsDesc(tipo);
   const mainW  = COLS_MAIN.reduce((s, c) => s + c.width, 0);
   const vtW    = COLS_VT.reduce((s, c) => s + c.width, 0);
   const totalW = mainW + 20 + vtW;
@@ -199,7 +211,7 @@ function Dashboard({ data, logoSrc, bolinhaSrc }: {
         {/* Título central */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: C.headerBg, letterSpacing: 0.5 }}>
-            Rota Inicial
+            {tipo === "parcial" ? "Rota Parcial" : "Rota Inicial"}
           </div>
           <div style={{ fontSize: 9, color: "#a0aec0", letterSpacing: 2, marginTop: 2 }}>
             RELATÓRIO DIÁRIO
@@ -235,7 +247,7 @@ function Dashboard({ data, logoSrc, bolinhaSrc }: {
         return (
           <div style={{ display: "flex", flexDirection: "column", width: descW }}>
             <SectionTitle label="Desconexão" width={descW} />
-            <Table cols={COLS_DESC} rows={data.desconexao} total={data.totalDesconexao} />
+            <Table cols={getColsDesc(tipo)} rows={data.desconexao} total={data.totalDesconexao} />
           </div>
         );
       })()}
@@ -246,7 +258,7 @@ function Dashboard({ data, logoSrc, bolinhaSrc }: {
 
 // ─── Função principal ─────────────────────────────────────────────────────────
 
-export async function generateDashImage(data: DashData): Promise<Buffer> {
+export async function generateDashImage(data: DashData, tipo: TipoDash = "completo"): Promise<Buffer> {
   const { readFileSync } = await import("fs");
   const { join }         = await import("path");
 
@@ -255,7 +267,7 @@ export async function generateDashImage(data: DashData): Promise<Buffer> {
   const bolinhaSrc = `data:image/png;base64,${readFileSync(join(process.cwd(), "public/bolinha.png")).toString("base64")}`;
 
   // Dimensões exatas
-  const mainW  = COLS_MAIN.reduce((s, c) => s + c.width, 0);
+  const mainW  = getColsMain(tipo).reduce((s, c) => s + c.width, 0);
   const vtW    = COLS_VT.reduce((s, c) => s + c.width, 0);
   const dashW  = mainW + 20 + vtW + 48;
 
@@ -267,7 +279,7 @@ export async function generateDashImage(data: DashData): Promise<Buffer> {
   const dashH  = 48 + 90 + 14 + Math.max(mainH, vtH) + 18 + 14 + descH + 24;
 
   const svg = await satori(
-    <Dashboard data={data} logoSrc={logoSrc} bolinhaSrc={bolinhaSrc} />,
+    <Dashboard data={data} logoSrc={logoSrc} bolinhaSrc={bolinhaSrc} tipo={tipo} />,
     {
       width: dashW,
       height: dashH,

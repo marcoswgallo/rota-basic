@@ -2,11 +2,38 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID!;
 const API = `https://api.telegram.org/bot${TOKEN}`;
 
+type InlineKeyboard = { text: string; callback_data: string }[][];
+
 export async function sendMessage(text: string, chatId = CHAT_ID) {
   await fetch(`${API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
+export async function sendMessageWithKeyboard(
+  text: string,
+  keyboard: InlineKeyboard,
+  chatId = CHAT_ID
+) {
+  await fetch(`${API}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: "Markdown",
+      reply_markup: { inline_keyboard: keyboard },
+    }),
+  });
+}
+
+export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+  await fetch(`${API}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
   });
 }
 
@@ -29,7 +56,7 @@ export async function setWebhook(url: string) {
   const res = await fetch(`${API}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, allowed_updates: ["message"] }),
+    body: JSON.stringify({ url, allowed_updates: ["message", "callback_query"] }),
   });
   return res.json();
 }
